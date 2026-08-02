@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   getProducts, getReviews, getOrders, getContactMessages, saveLocalData 
 } from './data';
+import { db } from './firebase';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -210,6 +212,27 @@ setOrders(getOrders());
     };
   }, []);
 
+  // ================= Đồng bộ đơn hàng real-time qua Firestore =================
+  // Lắng nghe collection "orders" trên Firebase - bất kỳ khách nào đặt hàng
+  // (ở bất kỳ thiết bị nào) sẽ tự động cập nhật ngay trên trang Admin.
+  useEffect(() => {
+    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        const firestoreOrders = snapshot.docs.map((d) => d.data() as Order);
+        setOrders(firestoreOrders);
+        saveLocalData('orders', firestoreOrders); // giữ bản cache local phòng khi mất mạng
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe đơn hàng từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   // Sync state changes with local storage
   const syncProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
@@ -224,6 +247,14 @@ setOrders(getOrders());
   const syncOrders = (newOrders: Order[]) => {
     setOrders(newOrders);
     saveLocalData('orders', newOrders);
+
+    // Ghi từng đơn hàng lên Firestore để đồng bộ real-time giữa mọi thiết bị.
+    // (onSnapshot ở trên sẽ tự động cập nhật lại state khi ghi thành công)
+    newOrders.forEach((order) => {
+      setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch((err) => {
+        console.error('Lỗi đồng bộ đơn hàng lên Firestore:', err);
+      });
+    });
   };
 
   const syncContactMessages = (newContactMessages: ContactMessage[]) => {
@@ -639,6 +670,10 @@ const handleDeleteOrder = (orderId: string) => {
 
   syncOrders(updatedOrders);
 
+  // Xóa luôn đơn hàng này khỏi Firestore để không bị "hồi sinh" qua real-time sync
+  deleteDoc(doc(db, 'orders', orderId)).catch((err) => {
+    console.error('Lỗi xóa đơn hàng trên Firestore:', err);
+  });
 
   // thêm đoạn này
  if (status === "PREPARING") {
