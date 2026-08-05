@@ -19,6 +19,19 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import { MessageSquare, Star, ArrowRight, Sparkles, Award, Heart, CheckCircle, ShieldCheck, BookOpen, Cpu, Clock, ArrowUpRight, ChevronRight, Newspaper, X } from 'lucide-react';
 import zaloQR from "./assets/images/zaloQR.jpg";
+
+// ================= Cấu hình tự động xử lý đơn hàng =================
+// Đơn hàng sẽ tự động chuyển qua 4 bước (Chờ xác nhận -> Chờ lấy hàng -> Chờ giao hàng -> Hoàn thành)
+// theo thời gian, không cần nhân viên bấm tay. Admin vẫn có thể bấm nút để xử lý thủ công/ghi đè bất cứ lúc nào.
+// ĐANG ĐỂ CHẾ ĐỘ DEMO: mỗi bước cách nhau 10 giây. Khi triển khai thật, đổi số mili-giây bên dưới
+// (vd: 10 * 60 * 1000 cho 10 phút/bước, hoặc vài giờ/bước tuỳ tốc độ chuẩn bị - vận chuyển thực tế).
+const AUTO_STEP_INTERVAL_MS = 10 * 1000; // 10 giây / bước (demo)
+const ORDER_STATUS_FLOW: Order['orderStatus'][] = ['RECEIVED', 'PREPARING', 'DELIVERING', 'COMPLETED'];
+
+// Thời gian dự kiến giao hàng hiển thị cho khách (tính từ lúc đặt đơn).
+// Mặc định: 1 ngày sau khi đặt hàng. Có thể đổi thành số giờ/ngày khác tuỳ nhu cầu thực tế của shop.
+const ESTIMATED_DELIVERY_MS = 24 * 60 * 60 * 1000; // 24 giờ
+
 export default function App() {
   // Master state
   const [currentView, setCurrentView] = useState<'client' | 'admin'>('client');
@@ -459,7 +472,8 @@ setOrders(getOrders());
   paymentMethod: customerData.paymentMethod,
   paymentStatus: customerData.paymentStatus,
   orderStatus: 'RECEIVED',
-  createdAt: new Date().toISOString()
+  createdAt: new Date().toISOString(),
+  estimatedDeliveryAt: new Date(Date.now() + ESTIMATED_DELIVERY_MS).toISOString()
 };
 
 // Gửi đơn hàng sang NodeJS để gửi email
@@ -743,6 +757,43 @@ const handleUpdateOrderStatus = (
   }
 
 };
+
+// ================= Tự động xử lý đơn hàng theo thời gian =================
+// Thay vì nhân viên phải bấm tay từng bước (Xác nhận -> Giao vận chuyển -> Hoàn thành),
+// hệ thống tự kiểm tra định kỳ và tự chuyển trạng thái đơn hàng theo mốc thời gian kể từ
+// lúc đặt hàng. Trang "Đơn hàng" của khách (UserAuthModal) đang lắng nghe cùng dữ liệu
+// `orders` real-time qua Firestore, nên sẽ tự cập nhật ngay khi trạng thái thay đổi ở đây -
+// không cần khách bấm F5. Nút bấm thủ công trong AdminPortal vẫn hoạt động bình thường,
+// nhân viên có thể xử lý tay hoặc ghi đè bất cứ lúc nào (ví dụ giao gấp, xử lý ngoại lệ...).
+useEffect(() => {
+  const timer = setInterval(() => {
+    orders.forEach((order) => {
+      // Bỏ qua đơn đã huỷ hoặc đã hoàn thành - không có gì để tự động thêm nữa
+      if (order.orderStatus === 'CANCELLED' || order.orderStatus === 'COMPLETED') return;
+
+      const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
+      const expectedStepIdx = Math.min(
+        ORDER_STATUS_FLOW.length - 1,
+        Math.floor(elapsedMs / AUTO_STEP_INTERVAL_MS)
+      );
+      const currentStepIdx = ORDER_STATUS_FLOW.indexOf(order.orderStatus);
+      const expectedStatus = ORDER_STATUS_FLOW[expectedStepIdx];
+
+      // Chỉ tự động ĐI TỚI (không bao giờ lùi lại) - nếu nhân viên đã xử lý
+      // nhanh hơn hoặc đơn đã ở bước sau, hệ thống sẽ không đụng vào.
+      if (expectedStepIdx > currentStepIdx) {
+        handleUpdateOrderStatus(
+          order.id,
+          expectedStatus,
+          expectedStatus === 'COMPLETED' ? 'PAID' : undefined
+        );
+      }
+    });
+  }, 2000); // kiểm tra mỗi 2 giây
+
+  return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [orders]);
 
 // ================= Xóa đơn hàng =================
 const handleDeleteOrder = (orderId: string) => {

@@ -49,6 +49,8 @@ export interface Order {
   paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED';
   orderStatus: 'RECEIVED' | 'PREPARING' | 'DELIVERING' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
+  // Ngày giờ dự kiến giao hàng tới khách (ISO string), tính tự động khi tạo đơn.
+  estimatedDeliveryAt?: string;
 }
 
 export interface Category {

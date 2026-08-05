@@ -436,6 +436,20 @@ export default function UserAuthModal({
                                 </div>
                               )}
                             </div>
+
+                            {/* Thời gian dự kiến giao hàng */}
+                            {order.orderStatus !== 'CANCELLED' && order.estimatedDeliveryAt && (
+                              <div className="flex items-center justify-between gap-2 text-[10px] font-bold bg-amber-50/70 text-amber-800 border border-amber-150 py-2 px-3 rounded-xl">
+                                <span className="flex items-center gap-1.5">
+                                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                                  {order.orderStatus === 'COMPLETED' ? 'Đã giao trong khoảng:' : 'Dự kiến giao hàng:'}
+                                </span>
+                                <span className="text-amber-900 font-black">
+                                  {new Date(order.estimatedDeliveryAt).toLocaleDateString('vi-VN')}{' '}
+                                  {new Date(order.estimatedDeliveryAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         ))
                       )}

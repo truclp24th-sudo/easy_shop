@@ -941,7 +941,21 @@ export default function AdminPortal({
                         </div>
 
                         <div className="space-y-3">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-left">Tiến độ giao dịch:</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-left">Tiến độ giao dịch:</p>
+                            {o.orderStatus !== 'CANCELLED' && o.orderStatus !== 'COMPLETED' && (
+                              <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-150 px-1.5 py-0.5 rounded-md">
+                                ⚡ Tự động xử lý
+                              </span>
+                            )}
+                          </div>
+                          {o.estimatedDeliveryAt && o.orderStatus !== 'CANCELLED' && (
+                            <p className="text-[10px] font-bold text-gray-500 text-left">
+                              Dự kiến giao: <span className="text-gray-800 font-black">
+                                {new Date(o.estimatedDeliveryAt).toLocaleDateString('vi-VN')} {new Date(o.estimatedDeliveryAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </p>
+                          )}
                           
                           {/* Visual 4-Step Stepper */}
                           {o.orderStatus !== 'CANCELLED' ? (
