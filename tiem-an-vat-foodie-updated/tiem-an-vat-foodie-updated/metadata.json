@@ -1,0 +1,6 @@
+{
+  "name": "EsyShop",
+  "description": "Cửa hàng thiết bị số EsyShop chuyên máy in nhiệt trực tiếp không cần mực, máy scan sắc nét và máy chiếu thông minh kết nối không dây, tích hợp giỏ hàng và thanh toán hỏa tốc.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
