@@ -482,18 +482,9 @@ fetch("/api/order", {
 const updatedOrders = [newOrder, ...orders];
 syncOrders(updatedOrders);
 
-    // Update sales counts for products in this order
-    const updatedProducts = products.map(p => {
-      const cartItem = cartItems.find(item => item.product.id === p.id);
-      if (cartItem) {
-        return {
-          ...p,
-          soldCount: p.soldCount + cartItem.quantity
-        };
-      }
-      return p;
-    });
-    syncProducts(updatedProducts);
+    // Lưu ý: soldCount (số lượng đã bán) KHÔNG tăng ở đây nữa.
+    // Nó chỉ tăng khi admin cập nhật trạng thái đơn hàng thành "Đã giao thành công"
+    // (xem handleUpdateOrderStatus) để phản ánh đúng số lượng đã bán thực tế.
 
     // Points earned: 1 point per 10,000 VND
     const pointsEarned = Math.floor(orderTotal / 10000);
@@ -656,6 +647,8 @@ const handleUpdateOrderStatus = (
   paymentStatus?: Order['paymentStatus']
 ) => {
 
+  const previousOrder = orders.find(o => o.id === orderId);
+
   const updatedOrders = orders.map(o => {
     if (o.id === orderId) {
       return {
@@ -668,6 +661,34 @@ const handleUpdateOrderStatus = (
   });
 
   syncOrders(updatedOrders);
+
+  // ================= Cập nhật soldCount (số lượng đã bán) =================
+  // Chỉ tính là "đã bán" khi đơn được xác nhận GIAO HÀNG THÀNH CÔNG.
+  // Nếu admin lỡ đổi từ COMPLETED sang trạng thái khác, số đã bán sẽ giảm lại tương ứng.
+  if (previousOrder && previousOrder.orderStatus !== status) {
+    const wasCompleted = previousOrder.orderStatus === 'COMPLETED';
+    const isNowCompleted = status === 'COMPLETED';
+
+    if (!wasCompleted && isNowCompleted) {
+      const updatedProducts = products.map(p => {
+        const orderItem = previousOrder.items.find(item => item.productId === p.id);
+        if (orderItem) {
+          return { ...p, soldCount: p.soldCount + orderItem.quantity };
+        }
+        return p;
+      });
+      syncProducts(updatedProducts);
+    } else if (wasCompleted && !isNowCompleted) {
+      const updatedProducts = products.map(p => {
+        const orderItem = previousOrder.items.find(item => item.productId === p.id);
+        if (orderItem) {
+          return { ...p, soldCount: Math.max(0, p.soldCount - orderItem.quantity) };
+        }
+        return p;
+      });
+      syncProducts(updatedProducts);
+    }
+  }
 
   const order = updatedOrders.find(o => o.id === orderId);
 
@@ -732,9 +753,23 @@ const handleDeleteOrder = (orderId: string) => {
 
   if (!confirmDelete) return;
 
+  const orderToDelete = orders.find(o => o.id === orderId);
+
   const updatedOrders = orders.filter(o => o.id !== orderId);
 
   syncOrders(updatedOrders);
+
+  // Nếu đơn bị xóa đã từng được tính "Đã giao thành công" thì trừ lại soldCount tương ứng
+  if (orderToDelete && orderToDelete.orderStatus === 'COMPLETED') {
+    const updatedProducts = products.map(p => {
+      const orderItem = orderToDelete.items.find(item => item.productId === p.id);
+      if (orderItem) {
+        return { ...p, soldCount: Math.max(0, p.soldCount - orderItem.quantity) };
+      }
+      return p;
+    });
+    syncProducts(updatedProducts);
+  }
 
   // Xóa luôn đơn hàng này khỏi Firestore để không bị "hồi sinh" qua real-time sync
   deleteDoc(doc(db, 'orders', orderId)).catch((err) => {
