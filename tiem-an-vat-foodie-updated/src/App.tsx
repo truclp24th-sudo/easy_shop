@@ -233,15 +233,78 @@ setOrders(getOrders());
     return () => unsubscribe();
   }, []);
 
-  // Sync state changes with local storage
+  // ================= Đồng bộ sản phẩm real-time qua Firestore =================
+  // (bao gồm cả soldCount - số lượng đã bán - để mọi khách đều thấy số mới nhất)
+  useEffect(() => {
+    let seeded = false;
+    const unsubscribe = onSnapshot(
+      collection(db, 'products'),
+      (snapshot) => {
+        if (snapshot.empty) {
+          // Lần đầu tiên chạy, Firestore chưa có dữ liệu -> seed bằng danh sách sản phẩm hiện có
+          if (!seeded) {
+            seeded = true;
+            products.forEach((p) => {
+              setDoc(doc(db, 'products', p.id), p).catch((err) =>
+                console.error('Lỗi khởi tạo sản phẩm lên Firestore:', err)
+              );
+            });
+          }
+          return;
+        }
+        const firestoreProducts = snapshot.docs.map((d) => d.data() as Product);
+        setProducts(firestoreProducts);
+        saveLocalData('products', firestoreProducts);
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe sản phẩm từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ================= Đồng bộ đánh giá real-time qua Firestore =================
+  useEffect(() => {
+    const reviewsQuery = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      reviewsQuery,
+      (snapshot) => {
+        const firestoreReviews = snapshot.docs.map((d) => d.data() as Review);
+        setReviews(firestoreReviews);
+        saveLocalData('reviews', firestoreReviews);
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe đánh giá từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Sync state changes with local storage + Firestore
   const syncProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
     saveLocalData('products', newProducts);
+
+    newProducts.forEach((product) => {
+      setDoc(doc(db, 'products', product.id), product, { merge: true }).catch((err) => {
+        console.error('Lỗi đồng bộ sản phẩm lên Firestore:', err);
+      });
+    });
   };
 
   const syncReviews = (newReviews: Review[]) => {
     setReviews(newReviews);
     saveLocalData('reviews', newReviews);
+
+    newReviews.forEach((review) => {
+      setDoc(doc(db, 'reviews', review.id), review, { merge: true }).catch((err) => {
+        console.error('Lỗi đồng bộ đánh giá lên Firestore:', err);
+      });
+    });
   };
 
   const syncOrders = (newOrders: Order[]) => {
@@ -582,6 +645,9 @@ syncOrders(updatedOrders);
 
   const handleDeleteProduct = (productId: string) => {
     syncProducts(products.filter(p => p.id !== productId));
+    deleteDoc(doc(db, 'products', productId)).catch((err) => {
+      console.error('Lỗi xóa sản phẩm trên Firestore:', err);
+    });
   };
 
 const handleUpdateOrderStatus = (
