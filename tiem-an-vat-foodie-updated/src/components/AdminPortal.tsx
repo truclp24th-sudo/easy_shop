@@ -202,7 +202,10 @@ export default function AdminPortal({
 
   const handleProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productForm.name || !productForm.image || productForm.price <= 0) return;
+    if (!productForm.name || !productForm.image || productForm.price <= 0) {
+      window.alert('Vui lòng điền đầy đủ Tên sản phẩm, Link ảnh sản phẩm và Giá bán tối thiểu (lớn hơn 0) trước khi lưu.');
+      return;
+    }
 
     if (editingProductId) {
       const original = products.find(p => p.id === editingProductId);
@@ -221,6 +224,7 @@ export default function AdminPortal({
           stock: Number(productForm.stock)
         });
       }
+      setIsAddingNew(false);
       setEditingProductId(null);
     } else {
       onAddProduct({
@@ -236,6 +240,7 @@ export default function AdminPortal({
         stock: Number(productForm.stock)
       });
       setIsAddingNew(false);
+      setEditingProductId(null);
     }
 
     // Reset Form
