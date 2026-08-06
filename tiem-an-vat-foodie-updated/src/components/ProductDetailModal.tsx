@@ -33,6 +33,8 @@ export default function ProductDetailModal({
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+  const availableStock = product.stock ?? 0;
+  const isInStock = product.isAvailable && availableStock > 0;
 
   const handlePrevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -305,7 +307,7 @@ export default function ProductDetailModal({
                 </div>
 
                 {/* Cart & Order Controls */}
-                {product.isAvailable ? (
+                {isInStock ? (
                   <div className="space-y-4 pt-4 border-t border-gray-100">
                     {/* Quantity Picker */}
                     <div className="flex items-center justify-between">
@@ -321,13 +323,18 @@ export default function ProductDetailModal({
                           {quantity}
                         </span>
                         <button
-                          onClick={() => setQuantity(quantity + 1)}
-                          className="px-3 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-950 font-black transition-colors"
+                          onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
+                          disabled={quantity >= availableStock}
+                          className="px-3 py-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-950 font-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                         >
                           +
                         </button>
                       </div>
                     </div>
+
+                    <p className="text-[11px] font-bold text-gray-400 -mt-2">
+                      Còn <span className="text-gray-700">{availableStock}</span> sản phẩm trong kho
+                    </p>
 
                     {/* Notification on successfully adding to cart */}
                     {addedSuccess && (

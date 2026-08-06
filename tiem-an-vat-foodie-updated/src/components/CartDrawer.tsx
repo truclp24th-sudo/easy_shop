@@ -189,11 +189,15 @@ export default function CartDrawer({
                               </span>
                               <button
                                 onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
-                                className="px-2 py-1 text-gray-500 hover:bg-gray-100 font-bold"
+                                disabled={item.quantity >= (item.product.stock ?? 0)}
+                                className="px-2 py-1 text-gray-500 hover:bg-gray-100 font-bold disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                               >
                                 +
                               </button>
                             </div>
+                            {item.quantity >= (item.product.stock ?? 0) && (
+                              <span className="text-[10px] font-bold text-amber-600">Đã đạt tối đa tồn kho</span>
+                            )}
                             
                             <span className="text-xs font-semibold text-gray-500">
                               Tổng: <span className="text-gray-800 font-bold">{formatPrice(item.product.price * item.quantity)}</span>

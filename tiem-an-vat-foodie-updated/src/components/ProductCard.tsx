@@ -16,7 +16,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onQuickOrder,
   onOpenDetails
 }) => {
-  
+
+  // Sản phẩm chỉ thực sự có thể mua khi admin bật "Mở bán" VÀ còn tồn kho > 0
+  const isInStock = product.isAvailable && (product.stock ?? 0) > 0;
+
   // Calculate discount percent
   const discountPercent = product.originalPrice 
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
@@ -63,7 +66,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
-        {!product.isAvailable && (
+        {!isInStock && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
             <span className="text-white font-black text-sm uppercase tracking-widest px-4 py-2 border-2 border-white rounded-xl">
               Tạm hết hàng
@@ -120,7 +123,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           {/* CTA Buttons */}
           <div className="grid grid-cols-2 gap-2">
             <button
-              disabled={!product.isAvailable}
+              disabled={!isInStock}
               id={`btn-quick-order-${product.id}`}
               onClick={() => onQuickOrder(product)}
               className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl bg-gray-950 text-white text-xs font-bold uppercase tracking-wider hover:bg-black active:scale-95 disabled:bg-gray-200 disabled:text-gray-400 transition-all cursor-pointer"
@@ -129,7 +132,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
               <span>Đặt Hàng</span>
             </button>
             <button
-              disabled={!product.isAvailable}
+              disabled={!isInStock}
               id={`btn-add-cart-${product.id}`}
               onClick={() => onAddToCart(product)}
               className="flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl bg-gray-50 text-gray-800 text-xs font-bold uppercase tracking-wider hover:bg-gray-100 active:scale-95 disabled:bg-gray-100 disabled:text-gray-400 transition-all cursor-pointer border border-gray-200"
