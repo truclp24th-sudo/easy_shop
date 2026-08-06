@@ -298,14 +298,23 @@ setOrders(getOrders());
   }, []);
 
   // Sync state changes with local storage + Firestore
-  const syncProducts = (newProducts: Product[]) => {
-    setProducts(newProducts);
-    saveLocalData('products', newProducts);
+  // Hỗ trợ truyền vào mảng sản phẩm mới HOẶC một hàm cập nhật (updater) nhận state mới nhất.
+  // Dùng dạng hàm cho MỌI thao tác liên quan tới tồn kho/soldCount để tránh "mất cập nhật"
+  // khi có nhiều thao tác xảy ra gần nhau (đặt hàng, tự động chuyển trạng thái đơn, hủy đơn...).
+  const syncProducts = (updater: Product[] | ((prev: Product[]) => Product[])) => {
+    setProducts(prev => {
+      const newProducts = typeof updater === 'function'
+        ? (updater as (p: Product[]) => Product[])(prev)
+        : updater;
 
-    newProducts.forEach((product) => {
-      setDoc(doc(db, 'products', product.id), product, { merge: true }).catch((err) => {
-        console.error('Lỗi đồng bộ sản phẩm lên Firestore:', err);
+      saveLocalData('products', newProducts);
+      newProducts.forEach((product) => {
+        setDoc(doc(db, 'products', product.id), product, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ sản phẩm lên Firestore:', err);
+        });
       });
+
+      return newProducts;
     });
   };
 
@@ -320,16 +329,22 @@ setOrders(getOrders());
     });
   };
 
-  const syncOrders = (newOrders: Order[]) => {
-    setOrders(newOrders);
-    saveLocalData('orders', newOrders);
+  const syncOrders = (updater: Order[] | ((prev: Order[]) => Order[])) => {
+    setOrders(prev => {
+      const newOrders = typeof updater === 'function'
+        ? (updater as (o: Order[]) => Order[])(prev)
+        : updater;
 
-    // Ghi từng đơn hàng lên Firestore để đồng bộ real-time giữa mọi thiết bị.
-    // (onSnapshot ở trên sẽ tự động cập nhật lại state khi ghi thành công)
-    newOrders.forEach((order) => {
-      setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch((err) => {
-        console.error('Lỗi đồng bộ đơn hàng lên Firestore:', err);
+      saveLocalData('orders', newOrders);
+      // Ghi từng đơn hàng lên Firestore để đồng bộ real-time giữa mọi thiết bị.
+      // (onSnapshot ở trên sẽ tự động cập nhật lại state khi ghi thành công)
+      newOrders.forEach((order) => {
+        setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ đơn hàng lên Firestore:', err);
+        });
       });
+
+      return newOrders;
     });
   };
 
@@ -555,8 +570,7 @@ fetch("/api/order", {
 });
 
 // Sau đó mới lưu đơn hàng
-const updatedOrders = [newOrder, ...orders];
-syncOrders(updatedOrders);
+syncOrders(prev => [newOrder, ...prev]);
 
     // Lưu ý: soldCount (số lượng đã bán) KHÔNG tăng ở đây nữa.
     // Nó chỉ tăng khi admin cập nhật trạng thái đơn hàng thành "Đã giao thành công"
@@ -567,7 +581,7 @@ syncOrders(updatedOrders);
     // nhiều khách cùng đặt vượt quá số lượng thực tế còn trong kho.
     // Nếu đơn sau đó bị hủy hoặc bị xóa, tồn kho sẽ được hoàn lại tương ứng
     // (xem handleUpdateOrderStatus / handleDeleteOrder).
-    const updatedProductsStock = products.map(p => {
+    const updatedProductsStock = (prevProducts: Product[]) => prevProducts.map(p => {
       const orderItem = newOrder.items.find(item => item.productId === p.id);
       if (orderItem) {
         return { ...p, stock: Math.max(0, (p.stock ?? 0) - orderItem.quantity) };
@@ -645,7 +659,7 @@ syncOrders(updatedOrders);
       ? Number((productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1))
       : 0;
 
-    const updatedProducts = products.map(p => {
+    const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
       if (p.id === productId) {
         return {
           ...p,
@@ -685,7 +699,7 @@ syncOrders(updatedOrders);
         ? Number((productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1))
         : 0;
 
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         if (p.id === pid) {
           return {
             ...p,
@@ -717,15 +731,15 @@ syncOrders(updatedOrders);
       reviewsCount: 0,
       soldCount: 0
     };
-    syncProducts([...products, addedProduct]);
+    syncProducts(prev => [...prev, addedProduct]);
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {
-    syncProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    syncProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
   };
 
   const handleDeleteProduct = (productId: string) => {
-    syncProducts(products.filter(p => p.id !== productId));
+    syncProducts(prev => prev.filter(p => p.id !== productId));
     deleteDoc(doc(db, 'products', productId)).catch((err) => {
       console.error('Lỗi xóa sản phẩm trên Firestore:', err);
     });
@@ -739,7 +753,7 @@ const handleUpdateOrderStatus = (
 
   const previousOrder = orders.find(o => o.id === orderId);
 
-  const updatedOrders = orders.map(o => {
+  syncOrders(prev => prev.map(o => {
     if (o.id === orderId) {
       let stockDeducted = o.stockDeducted;
       // Khi đơn chuyển sang HỦY: nếu tồn kho đã từng bị trừ, đánh dấu là đã hoàn (false)
@@ -758,9 +772,7 @@ const handleUpdateOrderStatus = (
       };
     }
     return o;
-  });
-
-  syncOrders(updatedOrders);
+  }));
 
   // ================= Cập nhật soldCount (số lượng đã bán) =================
   // Chỉ tính là "đã bán" khi đơn được xác nhận GIAO HÀNG THÀNH CÔNG.
@@ -770,7 +782,7 @@ const handleUpdateOrderStatus = (
     const isNowCompleted = status === 'COMPLETED';
 
     if (!wasCompleted && isNowCompleted) {
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
         if (orderItem) {
           return { ...p, soldCount: p.soldCount + orderItem.quantity };
@@ -779,7 +791,7 @@ const handleUpdateOrderStatus = (
       });
       syncProducts(updatedProducts);
     } else if (wasCompleted && !isNowCompleted) {
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
         if (orderItem) {
           return { ...p, soldCount: Math.max(0, p.soldCount - orderItem.quantity) };
@@ -800,7 +812,7 @@ const handleUpdateOrderStatus = (
     const isNowCancelled = status === 'CANCELLED';
 
     if (!wasCancelled && isNowCancelled && previousOrder.stockDeducted) {
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
         if (orderItem) {
           return { ...p, stock: (p.stock ?? 0) + orderItem.quantity };
@@ -810,7 +822,7 @@ const handleUpdateOrderStatus = (
       syncProducts(updatedProducts);
     } else if (wasCancelled && !isNowCancelled && !previousOrder.stockDeducted) {
       // Trường hợp hiếm: đơn đã hủy bị mở lại -> trừ tồn kho lại như lúc đặt hàng
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
         if (orderItem) {
           return { ...p, stock: Math.max(0, (p.stock ?? 0) - orderItem.quantity) };
@@ -821,7 +833,7 @@ const handleUpdateOrderStatus = (
     }
   }
 
-  const order = updatedOrders.find(o => o.id === orderId);
+  const order = previousOrder ? { ...previousOrder, orderStatus: status, paymentStatus: paymentStatus || previousOrder.paymentStatus } : undefined;
 
   if (!order) return;
 
@@ -923,13 +935,11 @@ const handleDeleteOrder = (orderId: string) => {
 
   const orderToDelete = orders.find(o => o.id === orderId);
 
-  const updatedOrders = orders.filter(o => o.id !== orderId);
-
-  syncOrders(updatedOrders);
+  syncOrders(prev => prev.filter(o => o.id !== orderId));
 
   // Nếu đơn bị xóa đã từng được tính "Đã giao thành công" thì trừ lại soldCount tương ứng
   if (orderToDelete && orderToDelete.orderStatus === 'COMPLETED') {
-    const updatedProducts = products.map(p => {
+    const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
       const orderItem = orderToDelete.items.find(item => item.productId === p.id);
       if (orderItem) {
         return { ...p, soldCount: Math.max(0, p.soldCount - orderItem.quantity) };
@@ -944,7 +954,7 @@ const handleDeleteOrder = (orderId: string) => {
   // CHỈ áp dụng cho đơn có cờ stockDeducted = true (đơn thực sự đã từng bị trừ kho) -
   // tránh hoàn nhầm tồn kho cho các đơn hàng cũ tạo trước khi có tính năng quản lý tồn kho.
   if (orderToDelete && orderToDelete.orderStatus !== 'CANCELLED' && orderToDelete.stockDeducted) {
-    const updatedProductsStock = products.map(p => {
+    const updatedProductsStock = (prevProducts: Product[]) => prevProducts.map(p => {
       const orderItem = orderToDelete.items.find(item => item.productId === p.id);
       if (orderItem) {
         return { ...p, stock: (p.stock ?? 0) + orderItem.quantity };
@@ -958,86 +968,6 @@ const handleDeleteOrder = (orderId: string) => {
   deleteDoc(doc(db, 'orders', orderId)).catch((err) => {
     console.error('Lỗi xóa đơn hàng trên Firestore:', err);
   });
-
-  // thêm đoạn này
- if (status === "PREPARING") {
-
-  const order = updatedOrders.find(o => o.id === orderId);
-
-  if (order) {
-    fetch("/api/order/confirm", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(order),
-    })
-    .then(res => res.json())
-    .then(data => console.log(data))
-    .catch(err => console.log(err));
-  }
-
-  }
-  if (status === "DELIVERING") {
-
-  const order = updatedOrders.find(o => o.id === orderId);
-
-  if (order) {
-
-    fetch("/api/order/delivering", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(order),
-    })
-    .then(res => res.json())
-    .then(data => console.log("Đã gửi email đang giao:", data))
-    .catch(console.error);
-
-  }
-
-  }
-  if (status === "DELIVERING") {
-
-  const order = updatedOrders.find(o => o.id === orderId);
-
-  if (order) {
-
-    fetch("/api/order/delivering", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(order),
-    })
-    .then(res => res.json())
-    .then(data => console.log("Đã gửi email đang giao:", data))
-    .catch(console.error);
-
-  }
-
-}
-if (status === "COMPLETED") {
-
-  const order = updatedOrders.find(o => o.id === orderId);
-
-  if (order) {
-
-    fetch("/api/order/completed", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(order),
-    })
-    .then(res => res.json())
-    .then(data => console.log("Đã gửi email giao hàng:", data))
-    .catch(console.error);
-
-  }
-
-}
 };
 
   const handleAddReviewReply = (reviewId: string, replyText: string) => {
@@ -1062,7 +992,7 @@ if (status === "COMPLETED") {
         ? Number((productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1))
         : 0;
 
-      const updatedProducts = products.map(p => {
+      const updatedProducts = (prevProducts: Product[]) => prevProducts.map(p => {
         if (p.id === pid) {
           return {
             ...p,
