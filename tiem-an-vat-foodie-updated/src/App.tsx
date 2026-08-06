@@ -369,20 +369,46 @@ setOrders(getOrders());
       setIsAuthModalOpen(true);
       return;
     }
+
+    const liveProduct = products.find(p => p.id === product.id) || product;
+    const availableStock = liveProduct.stock ?? 0;
+
+    if (availableStock <= 0) {
+      window.alert('Rất tiếc, sản phẩm này hiện đã hết hàng trong kho.');
+      return;
+    }
+
     setCartItems(prev => {
       const existingIdx = prev.findIndex(item => item.product.id === product.id);
+      const currentQtyInCart = existingIdx > -1 ? prev[existingIdx].quantity : 0;
+      const allowedToAdd = Math.max(0, availableStock - currentQtyInCart);
+
+      if (allowedToAdd <= 0) {
+        window.alert(`Bạn chỉ có thể đặt tối đa ${availableStock} sản phẩm này (đã có ${currentQtyInCart} trong giỏ hàng).`);
+        return prev;
+      }
+
+      const quantityToAdd = Math.min(quantity, allowedToAdd);
+      if (quantityToAdd < quantity) {
+        window.alert(`Kho chỉ còn ${availableStock} sản phẩm, hệ thống đã tự điều chỉnh số lượng thêm vào giỏ hàng cho phù hợp.`);
+      }
+
       if (existingIdx > -1) {
         const updated = [...prev];
-        updated[existingIdx].quantity += quantity;
+        updated[existingIdx].quantity += quantityToAdd;
         return updated;
       }
-      return [...prev, { product, quantity }];
+      return [...prev, { product: liveProduct, quantity: quantityToAdd }];
     });
   };
 
   const handleUpdateCartQuantity = (productId: string, quantity: number) => {
-    setCartItems(prev => prev.map(item => 
-      item.product.id === productId ? { ...item, quantity } : item
+    const liveProduct = products.find(p => p.id === productId);
+    const availableStock = liveProduct?.stock ?? 0;
+    const cappedQuantity = Math.max(1, Math.min(quantity, availableStock > 0 ? availableStock : quantity));
+
+    setCartItems(prev => prev.map(item =>
+      item.product.id === productId ? { ...item, quantity: cappedQuantity } : item
     ));
   };
 
@@ -434,8 +460,22 @@ setOrders(getOrders());
       setIsAuthModalOpen(true);
       return;
     }
+
+    const liveProduct = products.find(p => p.id === product.id) || product;
+    const availableStock = liveProduct.stock ?? 0;
+
+    if (availableStock <= 0) {
+      window.alert('Rất tiếc, sản phẩm này hiện đã hết hàng trong kho.');
+      return;
+    }
+
+    const cappedQuantity = Math.min(quantity, availableStock);
+    if (cappedQuantity < quantity) {
+      window.alert(`Kho chỉ còn ${availableStock} sản phẩm, hệ thống đã tự điều chỉnh số lượng đặt hàng cho phù hợp.`);
+    }
+
     // Clear cart or add item & proceed instantly
-    setCartItems([{ product, quantity }]);
+    setCartItems([{ product: liveProduct, quantity: cappedQuantity }]);
     setCartOpen(false);
     setCheckoutOpen(true);
   };
@@ -451,6 +491,27 @@ setOrders(getOrders());
   paymentStatus: 'PENDING' | 'PAID';
   isMemberRegistrationRequested?: boolean;
 }) => {
+    // ================= Kiểm tra tồn kho trước khi cho đặt hàng =================
+    // Lấy dữ liệu tồn kho MỚI NHẤT từ state `products` (không dùng bản cache trong giỏ hàng),
+    // để tránh trường hợp tồn kho đã thay đổi sau khi khách thêm vào giỏ.
+    const insufficientItems = cartItems
+      .map(item => {
+        const liveProduct = products.find(p => p.id === item.product.id);
+        const availableStock = liveProduct?.stock ?? 0;
+        return { item, availableStock };
+      })
+      .filter(({ item, availableStock }) => item.quantity > availableStock);
+
+    if (insufficientItems.length > 0) {
+      const message = insufficientItems
+        .map(({ item, availableStock }) =>
+          `- ${item.product.name}: chỉ còn ${availableStock} sản phẩm trong kho (bạn đang đặt ${item.quantity})`
+        )
+        .join('\n');
+      window.alert(`Rất tiếc, một số sản phẩm trong giỏ hàng không đủ số lượng tồn kho:\n\n${message}\n\nVui lòng điều chỉnh lại số lượng trước khi đặt hàng.`);
+      return;
+    }
+
     const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
     const orderTotal = orderSubtotal + (orderSubtotal > 150000 ? 0 : 15000);
 
@@ -499,6 +560,20 @@ syncOrders(updatedOrders);
     // Lưu ý: soldCount (số lượng đã bán) KHÔNG tăng ở đây nữa.
     // Nó chỉ tăng khi admin cập nhật trạng thái đơn hàng thành "Đã giao thành công"
     // (xem handleUpdateOrderStatus) để phản ánh đúng số lượng đã bán thực tế.
+
+    // ================= Trừ tồn kho ngay khi đặt hàng =================
+    // Tồn kho được "giữ chỗ" (trừ) ngay khi đơn được tạo, để tránh trường hợp
+    // nhiều khách cùng đặt vượt quá số lượng thực tế còn trong kho.
+    // Nếu đơn sau đó bị hủy hoặc bị xóa, tồn kho sẽ được hoàn lại tương ứng
+    // (xem handleUpdateOrderStatus / handleDeleteOrder).
+    const updatedProductsStock = products.map(p => {
+      const orderItem = newOrder.items.find(item => item.productId === p.id);
+      if (orderItem) {
+        return { ...p, stock: Math.max(0, (p.stock ?? 0) - orderItem.quantity) };
+      }
+      return p;
+    });
+    syncProducts(updatedProductsStock);
 
     // Points earned: 1 point per 10,000 VND
     const pointsEarned = Math.floor(orderTotal / 10000);
@@ -704,6 +779,35 @@ const handleUpdateOrderStatus = (
     }
   }
 
+  // ================= Hoàn lại tồn kho khi đơn hàng bị HỦY =================
+  // Tồn kho đã được trừ ngay lúc đặt hàng (xem handlePlaceOrder). Nếu đơn bị hủy,
+  // số lượng đó cần được cộng trả lại vào kho vì thực tế không có ai lấy hàng nữa.
+  if (previousOrder && previousOrder.orderStatus !== status) {
+    const wasCancelled = previousOrder.orderStatus === 'CANCELLED';
+    const isNowCancelled = status === 'CANCELLED';
+
+    if (!wasCancelled && isNowCancelled) {
+      const updatedProducts = products.map(p => {
+        const orderItem = previousOrder.items.find(item => item.productId === p.id);
+        if (orderItem) {
+          return { ...p, stock: (p.stock ?? 0) + orderItem.quantity };
+        }
+        return p;
+      });
+      syncProducts(updatedProducts);
+    } else if (wasCancelled && !isNowCancelled) {
+      // Trường hợp hiếm: đơn đã hủy bị mở lại -> trừ tồn kho lại như lúc đặt hàng
+      const updatedProducts = products.map(p => {
+        const orderItem = previousOrder.items.find(item => item.productId === p.id);
+        if (orderItem) {
+          return { ...p, stock: Math.max(0, (p.stock ?? 0) - orderItem.quantity) };
+        }
+        return p;
+      });
+      syncProducts(updatedProducts);
+    }
+  }
+
   const order = updatedOrders.find(o => o.id === orderId);
 
   if (!order) return;
@@ -820,6 +924,19 @@ const handleDeleteOrder = (orderId: string) => {
       return p;
     });
     syncProducts(updatedProducts);
+  }
+
+  // Hoàn lại tồn kho nếu đơn bị xóa CHƯA từng được hủy trước đó
+  // (vì tồn kho đã bị trừ ngay lúc đặt hàng - xem handlePlaceOrder - và chỉ được hoàn khi hủy đơn)
+  if (orderToDelete && orderToDelete.orderStatus !== 'CANCELLED') {
+    const updatedProductsStock = products.map(p => {
+      const orderItem = orderToDelete.items.find(item => item.productId === p.id);
+      if (orderItem) {
+        return { ...p, stock: (p.stock ?? 0) + orderItem.quantity };
+      }
+      return p;
+    });
+    syncProducts(updatedProductsStock);
   }
 
   // Xóa luôn đơn hàng này khỏi Firestore để không bị "hồi sinh" qua real-time sync
