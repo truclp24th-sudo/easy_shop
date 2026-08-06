@@ -127,7 +127,8 @@ export default function AdminPortal({
     image: '',
     images: [] as string[],
     category: 'notebook_paper',
-    isAvailable: true
+    isAvailable: true,
+    stock: 0
   });
 
   // Reply states for Reviews
@@ -216,7 +217,8 @@ export default function AdminPortal({
           image: productForm.image,
           images: productForm.images.filter(Boolean),
           category: productForm.category,
-          isAvailable: productForm.isAvailable
+          isAvailable: productForm.isAvailable,
+          stock: Number(productForm.stock)
         });
       }
       setEditingProductId(null);
@@ -230,7 +232,8 @@ export default function AdminPortal({
         image: productForm.image,
         images: productForm.images.filter(Boolean),
         category: productForm.category,
-        isAvailable: productForm.isAvailable
+        isAvailable: productForm.isAvailable,
+        stock: Number(productForm.stock)
       });
       setIsAddingNew(false);
     }
@@ -245,7 +248,8 @@ export default function AdminPortal({
       image: '',
       images: [],
       category: 'notebook_paper',
-      isAvailable: true
+      isAvailable: true,
+      stock: 0
     });
   };
 
@@ -261,7 +265,8 @@ export default function AdminPortal({
       image: p.image,
       images: p.images || [],
       category: p.category,
-      isAvailable: p.isAvailable
+      isAvailable: p.isAvailable,
+      stock: p.stock ?? 0
     });
   };
 
@@ -318,7 +323,7 @@ export default function AdminPortal({
               onClick={() => {
                 setIsAddingNew(true);
                 setEditingProductId(null);
-                setProductForm({ name: '', description: '', price: 0, priceMax: 0, originalPrice: 0, image: '', images: [], category: 'notebook_paper', isAvailable: true });
+                setProductForm({ name: '', description: '', price: 0, priceMax: 0, originalPrice: 0, image: '', images: [], category: 'notebook_paper', isAvailable: true, stock: 0 });
               }}
               className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-gray-950 text-white text-xs font-bold uppercase hover:bg-black transition-colors cursor-pointer"
             >
@@ -586,28 +591,43 @@ export default function AdminPortal({
                 </div>
 
                 <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold text-gray-700">
-                  <div>
-                    <label className="block mb-1">Tên sản phẩm *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Nước hoa Replica Lazy Sunday Morning"
-                      value={productForm.name}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
-                    />
-                  </div>
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block mb-1">Tên sản phẩm *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ví dụ: Nước hoa Replica Lazy Sunday Morning"
+                        value={productForm.name}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block mb-1">Danh mục *</label>
-                    <select
-                      value={productForm.category}
-                      onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
-                    >
-                      <option value="notebook_paper">Sổ và giấy các loại</option>
-                      <option value="digital_devices">Máy in, máy scan, máy chiếu</option>
-                    </select>
+                    <div>
+                      <label className="block mb-1">Danh mục *</label>
+                      <select
+                        value={productForm.category}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
+                        className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
+                      >
+                        <option value="notebook_paper">Sổ và giấy các loại</option>
+                        <option value="digital_devices">Máy in, máy scan, máy chiếu</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Tồn kho *</label>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        placeholder="Nhập số lượng tồn kho"
+                        value={productForm.stock}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, stock: Number(e.target.value) }))}
+                        className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -766,6 +786,7 @@ export default function AdminPortal({
                       <th className="p-4">Hình ảnh</th>
                       <th className="p-4">Tên sản phẩm / Danh mục</th>
                       <th className="p-4">Giá bán</th>
+                      <th className="p-4">Tồn kho</th>
                       <th className="p-4">Đã bán</th>
                       <th className="p-4">Trạng thái</th>
                       <th className="p-4 text-center">Hành động</th>
@@ -774,7 +795,7 @@ export default function AdminPortal({
                   <tbody className="divide-y divide-gray-100 font-semibold text-gray-800">
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-gray-400 italic font-medium">Không tìm thấy sản phẩm nào khớp với từ khóa tìm kiếm.</td>
+                        <td colSpan={7} className="p-8 text-center text-gray-400 italic font-medium">Không tìm thấy sản phẩm nào khớp với từ khóa tìm kiếm.</td>
                       </tr>
                     ) : (
                       filteredProducts.map((p) => (
@@ -796,6 +817,17 @@ export default function AdminPortal({
                           <td className="p-4 font-mono font-bold text-gray-950 text-xs">
                             {p.priceMax ? `${formatPrice(p.price)} - ${formatPrice(p.priceMax)}` : formatPrice(p.price)}
                             {p.originalPrice && <span className="block text-[10px] text-gray-400 line-through font-normal">{formatPrice(p.originalPrice)}</span>}
+                          </td>
+                          <td className="p-4 font-mono font-bold">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] ${
+                              (p.stock ?? 0) === 0
+                                ? 'bg-red-50 text-red-600'
+                                : (p.stock ?? 0) <= 10
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {p.stock ?? 0}
+                            </span>
                           </td>
                           <td className="p-4 font-mono text-gray-500">{p.soldCount} sản phẩm</td>
                           <td className="p-4">
