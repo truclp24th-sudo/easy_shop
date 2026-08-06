@@ -12,6 +12,7 @@ export interface Product {
   reviewsCount: number;
   isAvailable: boolean;
   soldCount: number;
+  stock: number;
 }
 
 export interface CartItem {

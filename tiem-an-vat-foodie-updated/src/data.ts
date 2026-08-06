@@ -23,7 +23,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'paper-2',
@@ -40,7 +41,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'paper-3',
@@ -56,7 +58,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'printer-1',
@@ -73,7 +76,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'printer-2',
@@ -86,7 +90,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'printer-3',
@@ -99,7 +104,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'scanner-1',
@@ -112,7 +118,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'scanner-2',
@@ -125,7 +132,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'projector-1',
@@ -138,7 +146,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   },
   {
     id: 'projector-2',
@@ -151,7 +160,8 @@ const INITIAL_PRODUCTS: Product[] = [
     rating: 0,
     reviewsCount: 0,
     isAvailable: true,
-    soldCount: 0
+    soldCount: 0,
+    stock: 0
   }
 ];
 
