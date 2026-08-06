@@ -534,7 +534,8 @@ setOrders(getOrders());
   paymentStatus: customerData.paymentStatus,
   orderStatus: 'RECEIVED',
   createdAt: new Date().toISOString(),
-  estimatedDeliveryAt: new Date(Date.now() + ESTIMATED_DELIVERY_MS).toISOString()
+  estimatedDeliveryAt: new Date(Date.now() + ESTIMATED_DELIVERY_MS).toISOString(),
+  stockDeducted: true
 };
 
 // Gửi đơn hàng sang NodeJS để gửi email
@@ -740,10 +741,20 @@ const handleUpdateOrderStatus = (
 
   const updatedOrders = orders.map(o => {
     if (o.id === orderId) {
+      let stockDeducted = o.stockDeducted;
+      // Khi đơn chuyển sang HỦY: nếu tồn kho đã từng bị trừ, đánh dấu là đã hoàn (false)
+      // để tránh hoàn kho 2 lần nếu trạng thái bị đổi qua lại nhiều lần.
+      if (status === 'CANCELLED' && o.orderStatus !== 'CANCELLED' && o.stockDeducted) {
+        stockDeducted = false;
+      } else if (o.orderStatus === 'CANCELLED' && status !== 'CANCELLED' && !o.stockDeducted) {
+        // Đơn đã hủy được mở lại -> tồn kho sẽ bị trừ lại, đánh dấu lại là true
+        stockDeducted = true;
+      }
       return {
         ...o,
         orderStatus: status,
-        paymentStatus: paymentStatus || o.paymentStatus
+        paymentStatus: paymentStatus || o.paymentStatus,
+        stockDeducted
       };
     }
     return o;
@@ -782,11 +793,13 @@ const handleUpdateOrderStatus = (
   // ================= Hoàn lại tồn kho khi đơn hàng bị HỦY =================
   // Tồn kho đã được trừ ngay lúc đặt hàng (xem handlePlaceOrder). Nếu đơn bị hủy,
   // số lượng đó cần được cộng trả lại vào kho vì thực tế không có ai lấy hàng nữa.
+  // CHỈ áp dụng cho đơn có cờ stockDeducted = true (đơn thực sự đã từng bị trừ kho) -
+  // để tránh hoàn nhầm tồn kho cho các đơn hàng cũ tạo trước khi có tính năng quản lý tồn kho.
   if (previousOrder && previousOrder.orderStatus !== status) {
     const wasCancelled = previousOrder.orderStatus === 'CANCELLED';
     const isNowCancelled = status === 'CANCELLED';
 
-    if (!wasCancelled && isNowCancelled) {
+    if (!wasCancelled && isNowCancelled && previousOrder.stockDeducted) {
       const updatedProducts = products.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
         if (orderItem) {
@@ -795,7 +808,7 @@ const handleUpdateOrderStatus = (
         return p;
       });
       syncProducts(updatedProducts);
-    } else if (wasCancelled && !isNowCancelled) {
+    } else if (wasCancelled && !isNowCancelled && !previousOrder.stockDeducted) {
       // Trường hợp hiếm: đơn đã hủy bị mở lại -> trừ tồn kho lại như lúc đặt hàng
       const updatedProducts = products.map(p => {
         const orderItem = previousOrder.items.find(item => item.productId === p.id);
@@ -928,7 +941,9 @@ const handleDeleteOrder = (orderId: string) => {
 
   // Hoàn lại tồn kho nếu đơn bị xóa CHƯA từng được hủy trước đó
   // (vì tồn kho đã bị trừ ngay lúc đặt hàng - xem handlePlaceOrder - và chỉ được hoàn khi hủy đơn)
-  if (orderToDelete && orderToDelete.orderStatus !== 'CANCELLED') {
+  // CHỈ áp dụng cho đơn có cờ stockDeducted = true (đơn thực sự đã từng bị trừ kho) -
+  // tránh hoàn nhầm tồn kho cho các đơn hàng cũ tạo trước khi có tính năng quản lý tồn kho.
+  if (orderToDelete && orderToDelete.orderStatus !== 'CANCELLED' && orderToDelete.stockDeducted) {
     const updatedProductsStock = products.map(p => {
       const orderItem = orderToDelete.items.find(item => item.productId === p.id);
       if (orderItem) {

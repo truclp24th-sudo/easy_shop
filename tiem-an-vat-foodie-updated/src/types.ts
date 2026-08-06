@@ -52,6 +52,10 @@ export interface Order {
   createdAt: string;
   // Ngày giờ dự kiến giao hàng tới khách (ISO string), tính tự động khi tạo đơn.
   estimatedDeliveryAt?: string;
+  // Đánh dấu đơn này ĐÃ thực sự trừ tồn kho lúc đặt hàng hay chưa.
+  // Chỉ những đơn có cờ này = true mới được hoàn lại tồn kho khi hủy/xóa,
+  // để tránh hoàn nhầm tồn kho cho các đơn hàng cũ (tạo trước khi có tính năng quản lý tồn kho).
+  stockDeducted?: boolean;
 }
 
 export interface Category {
