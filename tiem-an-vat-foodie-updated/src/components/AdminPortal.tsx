@@ -617,14 +617,16 @@ export default function AdminPortal({
                     </div>
 
                     <div>
-                      <label className="block mb-1">Tồn kho *</label>
+                      <label className="block mb-1">Tồn kho</label>
                       <input
                         type="number"
-                        required
                         min={0}
-                        placeholder="Nhập số lượng tồn kho"
-                        value={productForm.stock}
-                        onChange={(e) => setProductForm(prev => ({ ...prev, stock: Number(e.target.value) }))}
+                        placeholder="Nhập số lượng tồn kho (0 nếu hết hàng)"
+                        value={productForm.stock === 0 ? '' : productForm.stock}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setProductForm(prev => ({ ...prev, stock: raw === '' ? 0 : Number(raw) }));
+                        }}
                         className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
                       />
                     </div>
