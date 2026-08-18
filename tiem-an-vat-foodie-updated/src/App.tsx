@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  getProducts, getReviews, getOrders, getContactMessages, saveLocalData 
+  getProducts, getReviews, getOrders, getContactMessages, saveLocalData, CATEGORIES 
 } from './data';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon } from './types';
+import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon, Category } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import ProductCard from './components/ProductCard';
@@ -335,7 +335,85 @@ if (productId) {
     return () => unsubscribe();
   }, []);
 
-  // ================= Đồng bộ mã giảm giá real-time qua Firestore =================
+  // ================= Đồng bộ danh mục real-time qua Firestore =================
+  const [categories, setCategories] = useState<Category[]>(CATEGORIES.filter(c => c.id !== 'all'));
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'categories'),
+      (snapshot) => {
+        if (snapshot.empty) {
+          // Lần đầu chạy chưa có danh mục nào trên Firestore -> khởi tạo từ danh mục mặc định có sẵn.
+          CATEGORIES.filter(c => c.id !== 'all').forEach((cat) => {
+            setDoc(doc(db, 'categories', cat.id), cat, { merge: true }).catch((err) => {
+              console.error('Lỗi khởi tạo danh mục mặc định lên Firestore:', err);
+            });
+          });
+          return;
+        }
+        const firestoreCategories = snapshot.docs.map((d) => d.data() as Category);
+        setCategories(firestoreCategories);
+        saveLocalData('categories', firestoreCategories);
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe danh mục từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const syncCategories = (updater: Category[] | ((prev: Category[]) => Category[])) => {
+    setCategories(prev => {
+      const newCategories = typeof updater === 'function'
+        ? (updater as (c: Category[]) => Category[])(prev)
+        : updater;
+
+      saveLocalData('categories', newCategories);
+      newCategories.forEach((category) => {
+        setDoc(doc(db, 'categories', category.id), category, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ danh mục lên Firestore:', err);
+        });
+      });
+
+      return newCategories;
+    });
+  };
+
+  const slugify = (text: string) =>
+    text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `cat_${Date.now()}`;
+
+  const handleAddCategory = (name: string, icon: string) => {
+    const id = slugify(name);
+    if (categories.some(c => c.id === id)) {
+      window.alert('Danh mục này (hoặc tên tương tự) đã tồn tại rồi.');
+      return;
+    }
+    const newCategory: Category = { id, name: name.trim(), icon };
+    syncCategories(prev => [...prev, newCategory]);
+  };
+
+  const handleUpdateCategory = (updatedCategory: Category) => {
+    syncCategories(prev => prev.map(c => c.id === updatedCategory.id ? updatedCategory : c));
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    const productsUsingCategory = products.filter(p => p.category === categoryId).length;
+    if (productsUsingCategory > 0) {
+      window.alert(`Không thể xóa danh mục này vì đang có ${productsUsingCategory} sản phẩm thuộc danh mục này. Vui lòng chuyển các sản phẩm đó sang danh mục khác trước.`);
+      return;
+    }
+    syncCategories(prev => prev.filter(c => c.id !== categoryId));
+    deleteDoc(doc(db, 'categories', categoryId)).catch((err) => {
+      console.error('Lỗi xóa danh mục trên Firestore:', err);
+    });
+  };
+
+
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -1254,6 +1332,7 @@ const filteredProducts = products
                 onSearchChange={setSearchQuery}
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}
+                categories={categories}
               />
             </div>
 
@@ -1629,6 +1708,10 @@ const filteredProducts = products
                 onAddCoupon={handleAddCoupon}
                 onUpdateCoupon={handleUpdateCoupon}
                 onDeleteCoupon={handleDeleteCoupon}
+                categories={categories}
+                onAddCategory={handleAddCategory}
+                onUpdateCategory={handleUpdateCategory}
+                onDeleteCategory={handleDeleteCategory}
               />
             ) : (
               <AdminLogin

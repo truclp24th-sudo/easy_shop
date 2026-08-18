@@ -3,9 +3,10 @@ import {
   TrendingUp, ShoppingBag, MessageSquare, ShieldAlert, Plus, 
   Trash2, Edit, Save, Power, Check, RefreshCw, X, Award, MapPin, 
   CornerDownRight, CheckCircle, Clock, Truck, ShieldCheck, Flame, Info, Star,
-  Bot, Send, Bell, AlertCircle, Tag, Percent
+  Bot, Send, Bell, AlertCircle, Tag, Percent, Package
 } from 'lucide-react';
-import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon } from '../types';
+import { CATEGORY_ICON_OPTIONS, getCategoryIcon } from '../categoryIcons';
+import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminPortalProps {
@@ -29,6 +30,10 @@ interface AdminPortalProps {
   onAddCoupon: (coupon: Omit<Coupon, 'id' | 'usedCount' | 'createdAt'>) => void;
   onUpdateCoupon: (coupon: Coupon) => void;
   onDeleteCoupon: (couponId: string) => void;
+  categories: Category[];
+  onAddCategory: (name: string, icon: string) => void;
+  onUpdateCategory: (category: Category) => void;
+  onDeleteCategory: (categoryId: string) => void;
 }
 
 export default function AdminPortal({
@@ -51,9 +56,13 @@ export default function AdminPortal({
   coupons,
   onAddCoupon,
   onUpdateCoupon,
-  onDeleteCoupon
+  onDeleteCoupon,
+  categories,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'telegram'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'telegram'>('stats');
   const [reviewSubTab, setReviewSubTab] = useState<'product_reviews' | 'customer_feedback'>('product_reviews');
 
   // ================= Quản lý mã giảm giá (Coupon) =================
@@ -128,6 +137,40 @@ export default function AdminPortal({
     setIsAddingCoupon(false);
     setEditingCouponId(null);
     resetCouponForm();
+  };
+
+  // ================= Quản lý danh mục (Category) =================
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryForm, setCategoryForm] = useState({ name: '', icon: 'Package' });
+
+  const resetCategoryForm = () => setCategoryForm({ name: '', icon: 'Package' });
+
+  const startEditCategory = (c: Category) => {
+    setCategoryForm({ name: c.name, icon: c.icon });
+    setEditingCategoryId(c.id);
+    setIsAddingCategory(true);
+  };
+
+  const handleCategorySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryForm.name.trim()) {
+      window.alert('Vui lòng nhập tên danh mục.');
+      return;
+    }
+
+    if (editingCategoryId) {
+      const original = categories.find(c => c.id === editingCategoryId);
+      if (original) {
+        onUpdateCategory({ ...original, name: categoryForm.name.trim(), icon: categoryForm.icon });
+      }
+    } else {
+      onAddCategory(categoryForm.name.trim(), categoryForm.icon);
+    }
+
+    setIsAddingCategory(false);
+    setEditingCategoryId(null);
+    resetCategoryForm();
   };
 
 
@@ -208,7 +251,7 @@ export default function AdminPortal({
     originalPrice: 0,
     image: '',
     images: [] as string[],
-    category: 'notebook_paper',
+    category: categories[0]?.id || '',
     isAvailable: true,
     stock: 0
   });
@@ -334,7 +377,7 @@ export default function AdminPortal({
       originalPrice: 0,
       image: '',
       images: [],
-      category: 'notebook_paper',
+      category: categories[0]?.id || '',
       isAvailable: true,
       stock: 0
     });
@@ -410,7 +453,7 @@ export default function AdminPortal({
               onClick={() => {
                 setIsAddingNew(true);
                 setEditingProductId(null);
-                setProductForm({ name: '', description: '', price: 0, priceMax: 0, originalPrice: 0, image: '', images: [], category: 'notebook_paper', isAvailable: true, stock: 0 });
+                setProductForm({ name: '', description: '', price: 0, priceMax: 0, originalPrice: 0, image: '', images: [], category: categories[0]?.id || '', isAvailable: true, stock: 0 });
               }}
               className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-gray-950 text-white text-xs font-bold uppercase hover:bg-black transition-colors cursor-pointer"
             >
@@ -431,7 +474,7 @@ export default function AdminPortal({
 
       {/* Admin Tabs */}
       <div className="flex border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar gap-1.5">
-        {(['stats', 'products', 'orders', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
+        {(['stats', 'products', 'categories', 'orders', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
           const hasPendingFeedback = tab === 'reviews' && (
             reviews.some(r => r.status === 'PENDING') || 
             contactMessages.some(m => m.status === 'PENDING')
@@ -453,6 +496,7 @@ export default function AdminPortal({
             >
               {tab === 'stats' && 'Tổng quan số liệu'}
               {tab === 'products' && `Danh sách sản phẩm (${products.length})`}
+              {tab === 'categories' && `Danh mục (${categories.length})`}
               {tab === 'orders' && `Đơn đặt hàng (${orders.length})`}
               {tab === 'reviews' && `Quản lý đánh giá & Phản hồi (${reviews.length + contactMessages.length})`}
               {tab === 'coupons' && `Mã giảm giá (${coupons.length})`}
@@ -532,8 +576,9 @@ export default function AdminPortal({
                 
                 {/* Visual category barchart */}
                 <div className="space-y-4.5 py-2">
-                  {['notebook_paper', 'digital_devices'].map((catId) => {
-                    const label = catId === 'notebook_paper' ? 'Sổ và giấy các loại' : 'Máy in, máy scan, máy chiếu';
+                  {categories.map((cat) => {
+                    const catId = cat.id;
+                    const label = cat.name;
                     const value = orders
                       .filter(o => o.orderStatus !== 'CANCELLED')
                       .reduce((acc, order) => {
@@ -699,8 +744,13 @@ export default function AdminPortal({
                         onChange={(e) => setProductForm(prev => ({ ...prev, category: e.target.value }))}
                         className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
                       >
-                        <option value="notebook_paper">Sổ và giấy các loại</option>
-                        <option value="digital_devices">Máy in, máy scan, máy chiếu</option>
+                        {categories.length === 0 ? (
+                          <option value="">Chưa có danh mục nào - hãy tạo ở tab Danh mục</option>
+                        ) : (
+                          categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))
+                        )}
                       </select>
                     </div>
 
@@ -901,7 +951,7 @@ export default function AdminPortal({
                           <td className="p-4 max-w-xs">
                             <p className="font-extrabold text-gray-900 truncate">{p.name}</p>
                             <span className="text-[10px] uppercase font-bold text-gray-800 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
-                              {p.category === 'notebook_paper' ? 'Sổ và giấy các loại' : p.category === 'digital_devices' ? 'Máy in, máy scan, máy chiếu' : 'Chưa phân loại'}
+                              {categories.find(c => c.id === p.category)?.name || 'Chưa phân loại'}
                             </span>
                           </td>
                           <td className="p-4 font-mono font-bold text-gray-950 text-xs">
@@ -1766,6 +1816,137 @@ export default function AdminPortal({
                   )}
                 </tbody>
               </table>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Tab: Quản lý Danh mục */}
+        {activeTab === 'categories' && (
+          <motion.div
+            key="categories"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 font-semibold max-w-md">
+                Quản lý danh mục sản phẩm hiển thị trên trang chủ và trong bộ lọc. Không thể xóa danh mục đang có sản phẩm.
+              </p>
+              <button
+                onClick={() => { setIsAddingCategory(true); setEditingCategoryId(null); resetCategoryForm(); }}
+                className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-gray-950 hover:bg-black text-white text-xs font-bold uppercase transition-colors shrink-0 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" /> Thêm Danh Mục
+              </button>
+            </div>
+
+            {isAddingCategory && (
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-gray-900">
+                    {editingCategoryId ? 'Sửa danh mục' : 'Thêm danh mục mới'}
+                  </h3>
+                  <button
+                    onClick={() => { setIsAddingCategory(false); setEditingCategoryId(null); resetCategoryForm(); }}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCategorySubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold text-gray-700">
+                  <div>
+                    <label className="block mb-1">Tên danh mục *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ví dụ: Phụ kiện văn phòng"
+                      value={categoryForm.name}
+                      onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-hidden focus:border-gray-400 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">Biểu tượng</label>
+                    <div className="flex flex-wrap gap-2">
+                      {CATEGORY_ICON_OPTIONS.map((iconName) => {
+                        const IconComp = getCategoryIcon(iconName);
+                        return (
+                          <button
+                            type="button"
+                            key={iconName}
+                            onClick={() => setCategoryForm(prev => ({ ...prev, icon: iconName }))}
+                            className={`p-2.5 rounded-xl border transition-colors ${
+                              categoryForm.icon === iconName
+                                ? 'bg-gray-950 border-gray-950 text-white'
+                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'
+                            }`}
+                          >
+                            <IconComp className="h-4 w-4" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2 flex justify-end gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => { setIsAddingCategory(false); setEditingCategoryId(null); resetCategoryForm(); }}
+                      className="py-2.5 px-5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold uppercase cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex items-center gap-1.5 py-2.5 px-5 rounded-xl bg-gray-950 hover:bg-black text-white text-xs font-bold uppercase cursor-pointer"
+                    >
+                      <Save className="h-3.5 w-3.5" /> {editingCategoryId ? 'Lưu thay đổi' : 'Thêm danh mục'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categories.length === 0 ? (
+                <p className="text-xs text-gray-400 italic col-span-full text-center py-10">Chưa có danh mục nào.</p>
+              ) : (
+                categories.map((c) => {
+                  const IconComp = getCategoryIcon(c.icon);
+                  const productCount = products.filter(p => p.category === c.id).length;
+                  return (
+                    <div key={c.id} className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-700 shrink-0">
+                        <IconComp className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-gray-900 truncate">{c.name}</p>
+                        <p className="text-[10px] text-gray-400 font-semibold">{productCount} sản phẩm</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => startEditCategory(c)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Xóa danh mục "${c.name}"?`)) {
+                              onDeleteCategory(c.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </motion.div>
         )}

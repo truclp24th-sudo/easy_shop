@@ -1,33 +1,31 @@
-import { Search, Sparkles, Trophy, ShieldCheck, Printer, Scan, Tv } from 'lucide-react';
-import { CATEGORIES } from '../data';
-import * as LucideIcons from 'lucide-react';
+import { Search, Sparkles, Trophy, ShieldCheck } from 'lucide-react';
+import { getCategoryIcon } from '../categoryIcons';
+import { Category } from '../types';
 
 interface HeroProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   selectedCategory: string;
   onCategoryChange: (categoryId: string) => void;
+  categories: Category[];
 }
 
 export default function Hero({
   searchQuery,
   onSearchChange,
   selectedCategory,
-  onCategoryChange
+  onCategoryChange,
+  categories
 }: HeroProps) {
   
-  // Dynamic icon renderer helper for categories
+  // Dynamic icon renderer helper for categories - tra cứu theo tên icon qua bảng CATEGORY_ICON_MAP
+  // (đã tách riêng ở src/categoryIcons.ts) để tránh phải import cả thư viện lucide-react.
   const renderCategoryIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Grid': return <LucideIcons.Grid className="h-4 w-4" />;
-      case 'BookOpen': return <LucideIcons.BookOpen className="h-4 w-4" />;
-      case 'Cpu': return <LucideIcons.Cpu className="h-4 w-4" />;
-      case 'Printer': return <LucideIcons.Printer className="h-4 w-4" />;
-      case 'Scan': return <LucideIcons.Scan className="h-4 w-4" />;
-      case 'Tv': return <LucideIcons.Tv className="h-4 w-4" />;
-      default: return <LucideIcons.Sparkles className="h-4 w-4" />;
-    }
+    const IconComponent = getCategoryIcon(iconName);
+    return <IconComponent className="h-4 w-4" />;
   };
+
+  const allCategories: Category[] = [{ id: 'all', name: 'Tất cả', icon: 'Grid' }, ...categories];
 
   return (
     <div className="relative overflow-hidden bg-white pt-16 pb-20 px-4 sm:px-6 lg:px-8 border-b border-gray-100/60">
@@ -122,7 +120,7 @@ export default function Hero({
             
             {/* Fine Scrollable Badges */}
             <div className="flex items-center gap-3.5 max-w-full overflow-x-auto pb-4 pt-1 px-4 no-scrollbar">
-              {CATEGORIES.map((category) => {
+              {allCategories.map((category) => {
                 const isActive = selectedCategory === category.id;
                 return (
                   <button
