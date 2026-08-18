@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 // Cấu hình Firebase - lấy từ biến môi trường (VITE_ để Vite expose ra frontend)
 const firebaseConfig = {
@@ -13,4 +13,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+// QUAN TRỌNG: ignoreUndefinedProperties: true giúp Firestore tự bỏ qua các trường có giá trị
+// "undefined" (ví dụ: để trống ô không bắt buộc như hạn dùng, giới hạn lượt dùng mã giảm giá...)
+// thay vì NÉM LỖI và làm trắng trang. Mặc định Firestore KHÔNG chấp nhận undefined.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
