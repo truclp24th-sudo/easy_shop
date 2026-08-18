@@ -98,7 +98,7 @@ export default function Header({
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* View Switcher Button (Only visible in admin view to let admins go back) */}
             {currentView === 'admin' && (
               <button
@@ -120,7 +120,7 @@ export default function Header({
               <button
                 id="wishlist-trigger-btn"
                 onClick={onWishlistClick}
-                className="relative p-2.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors shadow-xs group"
+                className="relative p-2 sm:p-2.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors shadow-xs group"
               >
                 <Heart className="h-5.5 w-5.5 transition-transform group-hover:scale-110" />
                 <AnimatePresence>
@@ -143,7 +143,7 @@ export default function Header({
               <button
                 id="cart-trigger-btn"
                 onClick={onCartClick}
-                className="relative p-2.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors shadow-xs group"
+                className="relative p-2 sm:p-2.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors shadow-xs group"
               >
                 <ShoppingCart className="h-5.5 w-5.5 transition-transform group-hover:scale-110" />
                 <AnimatePresence>
@@ -183,10 +183,10 @@ export default function Header({
                 <button
                   id="user-auth-btn"
                   onClick={onAuthClick}
-                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gray-950 hover:bg-black text-white text-xs font-bold transition-all border border-gray-800 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl bg-gray-950 hover:bg-black text-white text-xs font-bold transition-all border border-gray-800 cursor-pointer"
                 >
                   <User className="h-3.5 w-3.5" />
-                  <span>Đăng Nhập</span>
+                  <span className="hidden sm:inline">Đăng Nhập</span>
                 </button>
               )
             )}

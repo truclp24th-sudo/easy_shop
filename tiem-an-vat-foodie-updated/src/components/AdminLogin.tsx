@@ -19,9 +19,15 @@ export default function AdminLogin({ onLoginSuccess, onBackToStore }: AdminLogin
     setError('');
     setIsLoading(true);
 
+    // LƯU Ý: đây chỉ là kiểm tra ở phía trình duyệt (client), không phải bảo mật thật sự -
+    // xem ghi chú chi tiết trong file .env.example. Đọc từ biến môi trường thay vì viết cứng
+    // để chủ shop có thể tự đổi tài khoản/mật khẩu mà không cần sửa code.
+    const validUsername = (import.meta.env.VITE_ADMIN_USERNAME || 'admin').toLowerCase();
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+
     // Simulate authentication api call
     setTimeout(() => {
-      if (username.trim().toLowerCase() === 'admin' && password === '123456') {
+      if (username.trim().toLowerCase() === validUsername && password === validPassword) {
         localStorage.setItem('isAdminAuthenticated', 'true');
         onLoginSuccess();
       } else {
@@ -145,16 +151,6 @@ export default function AdminLogin({ onLoginSuccess, onBackToStore }: AdminLogin
             </button>
           </div>
         </form>
-
-        <div className="mt-6 border-t border-slate-100 pt-6 text-center">
-          <div className="inline-flex flex-col items-center bg-gray-50 rounded-2xl p-4 border border-gray-200 w-full">
-            <span className="text-[10px] font-black uppercase text-gray-800 tracking-wider">Thông tin đăng nhập demo:</span>
-            <div className="text-xs font-mono text-gray-900 mt-1 flex gap-4">
-              <span>User: <strong className="font-bold text-gray-950">admin</strong></span>
-              <span>Pass: <strong className="font-bold text-gray-950">admin123</strong></span>
-            </div>
-          </div>
-        </div>
       </motion.div>
     </div>
   );

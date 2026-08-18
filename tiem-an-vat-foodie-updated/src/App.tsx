@@ -234,8 +234,6 @@ if (productId) {
 
 }
 
-setReviews(getReviews());
-setOrders(getOrders());
     setReviews(getReviews());
     setOrders(getOrders());
     setContactMessages(getContactMessages());
