@@ -50,6 +50,9 @@ export interface Order {
   paymentStatus: 'PENDING' | 'PAID' | 'REFUNDED';
   orderStatus: 'RECEIVED' | 'PREPARING' | 'DELIVERING' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
+  // Mã giảm giá đã áp dụng cho đơn này (nếu có).
+  couponCode?: string;
+  discountAmount?: number;
   // Ngày giờ dự kiến giao hàng tới khách (ISO string), tính tự động khi tạo đơn.
   estimatedDeliveryAt?: string;
   // Đánh dấu đơn này ĐÃ thực sự trừ tồn kho lúc đặt hàng hay chưa.
@@ -82,6 +85,26 @@ export interface AppUser {
   isMember: boolean;
   memberCardNo?: string;
   memberPoints: number;
+  createdAt: string;
+  // Danh sách id sản phẩm khách đã thêm vào Yêu thích.
+  wishlist?: string[];
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: 'percent' | 'fixed';
+  value: number;
+  // Đơn hàng tối thiểu để áp dụng mã (VND). Để trống/0 nếu không giới hạn.
+  minOrderValue?: number;
+  // Giảm tối đa (VND) - chỉ áp dụng cho loại phần trăm, tránh giảm quá nhiều.
+  maxDiscountAmount?: number;
+  // Số lượt sử dụng tối đa. Để trống = không giới hạn.
+  usageLimit?: number;
+  usedCount: number;
+  // Hạn sử dụng (ISO date string). Để trống = không hết hạn.
+  expiresAt?: string;
+  isActive: boolean;
   createdAt: string;
 }
 

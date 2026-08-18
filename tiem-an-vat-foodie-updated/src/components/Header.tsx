@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShoppingCart, Store, ShieldCheck, Menu, X, Sparkles, User, Award } from 'lucide-react';
+import { ShoppingCart, Store, ShieldCheck, Menu, X, Sparkles, User, Award, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppUser } from '../types';
 
@@ -8,6 +8,8 @@ interface HeaderProps {
   onViewChange: (view: 'client' | 'admin') => void;
   cartCount: number;
   onCartClick: () => void;
+  wishlistCount: number;
+  onWishlistClick: () => void;
   activeSection: string;
   onSectionClick: (sectionId: string) => void;
   currentUser: AppUser | null;
@@ -19,6 +21,8 @@ export default function Header({
   onViewChange,
   cartCount,
   onCartClick,
+  wishlistCount,
+  onWishlistClick,
   activeSection,
   onSectionClick,
   currentUser,
@@ -108,6 +112,29 @@ export default function Header({
                 <Store className="h-4 w-4 text-gray-600" />
                 <span className="hidden sm:inline">Về Cửa Hàng</span>
                 <span className="sm:hidden">Shop</span>
+              </button>
+            )}
+
+            {/* Wishlist Trigger */}
+            {currentView === 'client' && (
+              <button
+                id="wishlist-trigger-btn"
+                onClick={onWishlistClick}
+                className="relative p-2.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors shadow-xs group"
+              >
+                <Heart className="h-5.5 w-5.5 transition-transform group-hover:scale-110" />
+                <AnimatePresence>
+                  {wishlistCount > 0 && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center shadow-md shadow-rose-200"
+                    >
+                      {wishlistCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </button>
             )}
 

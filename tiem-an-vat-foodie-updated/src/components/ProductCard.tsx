@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, Flame, Star, Zap } from 'lucide-react';
+import { ShoppingCart, Flame, Star, Zap, Heart } from 'lucide-react';
 import { Product } from '../types';
 import { motion } from 'motion/react';
 
@@ -8,13 +8,17 @@ interface ProductCardProps {
   onAddToCart: (product: Product) => void;
   onQuickOrder: (product: Product) => void;
   onOpenDetails: (product: Product) => void;
+  isWishlisted?: boolean;
+  onToggleWishlist?: (productId: string) => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onAddToCart,
   onQuickOrder,
-  onOpenDetails
+  onOpenDetails,
+  isWishlisted = false,
+  onToggleWishlist
 }) => {
 
   // Sản phẩm chỉ thực sự có thể mua khi admin bật "Mở bán" VÀ còn tồn kho > 0
@@ -53,6 +57,24 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </span>
         )}
       </div>
+
+      {/* Wishlist (Yêu thích) Button */}
+      {onToggleWishlist && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleWishlist(product.id);
+          }}
+          className={`absolute top-4 right-4 z-10 h-9 w-9 rounded-full flex items-center justify-center shadow-md border transition-all active:scale-90 ${
+            isWishlisted
+              ? 'bg-rose-600 border-rose-600 text-white'
+              : 'bg-white/90 border-gray-200 text-gray-400 hover:text-rose-600 hover:border-rose-200'
+          }`}
+          aria-label="Yêu thích"
+        >
+          <Heart className={`h-4.5 w-4.5 ${isWishlisted ? 'fill-white' : ''}`} />
+        </button>
+      )}
 
       {/* Product Image */}
       <div 

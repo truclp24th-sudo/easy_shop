@@ -4,12 +4,13 @@ import {
 } from './data';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig } from './types';
+import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import ProductCard from './components/ProductCard';
 import ProductDetailModal from './components/ProductDetailModal';
 import CartDrawer from './components/CartDrawer';
+import WishlistDrawer from './components/WishlistDrawer';
 import CheckoutModal from './components/CheckoutModal';
 import ContactSection from './components/ContactSection';
 import AdminPortal from './components/AdminPortal';
@@ -108,6 +109,35 @@ export default function App() {
     sessionStorage.removeItem('aura_current_user');
   };
 
+  // ================= Yêu thích (Wishlist) =================
+  // Chỉ khách đã đăng nhập mới dùng được, danh sách lưu theo từng tài khoản (localStorage).
+  const handleToggleWishlist = (productId: string) => {
+    if (!currentUser) {
+      setAuthModalMessage('Vui lòng đăng nhập để lưu sản phẩm vào danh sách yêu thích.');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    const currentWishlist = currentUser.wishlist || [];
+    const isWishlisted = currentWishlist.includes(productId);
+    const newWishlist = isWishlisted
+      ? currentWishlist.filter(id => id !== productId)
+      : [...currentWishlist, productId];
+
+    const updatedUser: AppUser = { ...currentUser, wishlist: newWishlist };
+    setCurrentUser(updatedUser);
+
+    if (localStorage.getItem('aura_current_user')) {
+      localStorage.setItem('aura_current_user', JSON.stringify(updatedUser));
+    } else {
+      sessionStorage.setItem('aura_current_user', JSON.stringify(updatedUser));
+    }
+
+    const updatedUsers = [...users.filter(u => u.phone !== updatedUser.phone), updatedUser];
+    setUsers(updatedUsers);
+    localStorage.setItem('aura_users_list', JSON.stringify(updatedUsers));
+  };
+
   // Custom route navigator helper
   const navigate = (toPath: string) => {
     window.history.pushState({}, '', toPath);
@@ -159,6 +189,14 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const reviewProductId = new URLSearchParams(window.location.search).get("product");
   const [cartOpen, setCartOpen] = useState(false);
+  const [wishlistOpen, setWishlistOpen] = useState(false);
+  // Mã giảm giá khách đã áp dụng trong giỏ hàng (được dùng thật khi đặt hàng)
+  const [appliedCouponCode, setAppliedCouponCode] = useState('');
+  const [appliedDiscountAmount, setAppliedDiscountAmount] = useState(0);
+  const setAppliedCoupon = (code: string, amount: number) => {
+    setAppliedCouponCode(code);
+    setAppliedDiscountAmount(amount);
+  };
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   // Load database on mount and listen to custom admin routing
@@ -297,7 +335,64 @@ setOrders(getOrders());
     return () => unsubscribe();
   }, []);
 
-  // Sync state changes with local storage + Firestore
+  // ================= Đồng bộ mã giảm giá real-time qua Firestore =================
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'coupons'),
+      (snapshot) => {
+        const firestoreCoupons = snapshot.docs.map((d) => d.data() as Coupon);
+        setCoupons(firestoreCoupons);
+        saveLocalData('coupons', firestoreCoupons);
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe mã giảm giá từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const syncCoupons = (updater: Coupon[] | ((prev: Coupon[]) => Coupon[])) => {
+    setCoupons(prev => {
+      const newCoupons = typeof updater === 'function'
+        ? (updater as (c: Coupon[]) => Coupon[])(prev)
+        : updater;
+
+      saveLocalData('coupons', newCoupons);
+      newCoupons.forEach((coupon) => {
+        setDoc(doc(db, 'coupons', coupon.id), coupon, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ mã giảm giá lên Firestore:', err);
+        });
+      });
+
+      return newCoupons;
+    });
+  };
+
+  const handleAddCoupon = (newCoupon: Omit<Coupon, 'id' | 'usedCount' | 'createdAt'>) => {
+    const coupon: Coupon = {
+      ...newCoupon,
+      code: newCoupon.code.trim().toUpperCase(),
+      id: newCoupon.code.trim().toUpperCase(),
+      usedCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    syncCoupons(prev => [...prev.filter(c => c.id !== coupon.id), coupon]);
+  };
+
+  const handleUpdateCoupon = (updatedCoupon: Coupon) => {
+    syncCoupons(prev => prev.map(c => c.id === updatedCoupon.id ? updatedCoupon : c));
+  };
+
+  const handleDeleteCoupon = (couponId: string) => {
+    syncCoupons(prev => prev.filter(c => c.id !== couponId));
+    deleteDoc(doc(db, 'coupons', couponId)).catch((err) => {
+      console.error('Lỗi xóa mã giảm giá trên Firestore:', err);
+    });
+  };
+
+
   // Hỗ trợ truyền vào mảng sản phẩm mới HOẶC một hàm cập nhật (updater) nhận state mới nhất.
   // Dùng dạng hàm cho MỌI thao tác liên quan tới tồn kho/soldCount để tránh "mất cập nhật"
   // khi có nhiều thao tác xảy ra gần nhau (đặt hàng, tự động chuyển trạng thái đơn, hủy đơn...).
@@ -528,7 +623,35 @@ setOrders(getOrders());
     }
 
     const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    const orderTotal = orderSubtotal + (orderSubtotal > 150000 ? 0 : 15000);
+    const shippingFee = orderSubtotal > 150000 ? 0 : 15000;
+
+    // ================= Kiểm tra lại mã giảm giá (nếu có) ngay trước khi đặt hàng =================
+    // Đề phòng mã đã bị admin tắt/xóa/hết lượt trong lúc khách đang điền thông tin thanh toán.
+    let finalDiscountAmount = 0;
+    let finalCouponCode = '';
+    if (appliedCouponCode) {
+      const liveCoupon = coupons.find(c => c.id === appliedCouponCode);
+      const stillValid = liveCoupon
+        && liveCoupon.isActive
+        && (!liveCoupon.expiresAt || new Date(liveCoupon.expiresAt).getTime() >= Date.now())
+        && (!liveCoupon.usageLimit || liveCoupon.usedCount < liveCoupon.usageLimit)
+        && (!liveCoupon.minOrderValue || orderSubtotal >= liveCoupon.minOrderValue);
+
+      if (stillValid && liveCoupon) {
+        finalCouponCode = liveCoupon.id;
+        finalDiscountAmount = liveCoupon.discountType === 'percent'
+          ? Math.round((orderSubtotal * liveCoupon.value) / 100)
+          : liveCoupon.value;
+        if (liveCoupon.maxDiscountAmount) {
+          finalDiscountAmount = Math.min(finalDiscountAmount, liveCoupon.maxDiscountAmount);
+        }
+        finalDiscountAmount = Math.min(finalDiscountAmount, orderSubtotal);
+      } else {
+        window.alert('Rất tiếc, mã giảm giá bạn áp dụng không còn hiệu lực. Đơn hàng sẽ được tính theo giá gốc, vui lòng kiểm tra lại trước khi xác nhận.');
+      }
+    }
+
+    const orderTotal = Math.max(0, orderSubtotal + shippingFee - finalDiscountAmount);
 
     const newOrder: Order = {
   id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -550,7 +673,9 @@ setOrders(getOrders());
   orderStatus: 'RECEIVED',
   createdAt: new Date().toISOString(),
   estimatedDeliveryAt: new Date(Date.now() + ESTIMATED_DELIVERY_MS).toISOString(),
-  stockDeducted: true
+  stockDeducted: true,
+  couponCode: finalCouponCode || undefined,
+  discountAmount: finalDiscountAmount || undefined
 };
 
 // Gửi đơn hàng sang NodeJS để gửi email
@@ -589,6 +714,17 @@ syncOrders(prev => [newOrder, ...prev]);
       return p;
     });
     syncProducts(updatedProductsStock);
+
+    // ================= Cập nhật lượt đã dùng của mã giảm giá (nếu có áp dụng) =================
+    if (finalCouponCode) {
+      syncCoupons(prev => prev.map(c =>
+        c.id === finalCouponCode ? { ...c, usedCount: c.usedCount + 1 } : c
+      ));
+    }
+
+    // Xoá mã giảm giá đã áp dụng khỏi giỏ hàng sau khi đặt hàng thành công
+    setAppliedCouponCode('');
+    setAppliedDiscountAmount(0);
 
     // Points earned: 1 point per 10,000 VND
     const pointsEarned = Math.floor(orderTotal / 10000);
@@ -831,6 +967,19 @@ const handleUpdateOrderStatus = (
       });
       syncProducts(updatedProducts);
     }
+
+    // Hoàn lại lượt sử dụng mã giảm giá nếu đơn có áp dụng mã và bị hủy
+    if (previousOrder.couponCode) {
+      if (!wasCancelled && isNowCancelled) {
+        syncCoupons(prev => prev.map(c =>
+          c.id === previousOrder.couponCode ? { ...c, usedCount: Math.max(0, c.usedCount - 1) } : c
+        ));
+      } else if (wasCancelled && !isNowCancelled) {
+        syncCoupons(prev => prev.map(c =>
+          c.id === previousOrder.couponCode ? { ...c, usedCount: c.usedCount + 1 } : c
+        ));
+      }
+    }
   }
 
   const order = previousOrder ? { ...previousOrder, orderStatus: status, paymentStatus: paymentStatus || previousOrder.paymentStatus } : undefined;
@@ -964,6 +1113,14 @@ const handleDeleteOrder = (orderId: string) => {
     syncProducts(updatedProductsStock);
   }
 
+  // Hoàn lại lượt sử dụng mã giảm giá nếu đơn bị xóa có áp dụng mã và CHƯA từng bị hủy
+  // (nếu đã hủy trước đó thì lượt dùng đã được hoàn lại rồi, tránh hoàn 2 lần)
+  if (orderToDelete && orderToDelete.orderStatus !== 'CANCELLED' && orderToDelete.couponCode) {
+    syncCoupons(prev => prev.map(c =>
+      c.id === orderToDelete.couponCode ? { ...c, usedCount: Math.max(0, c.usedCount - 1) } : c
+    ));
+  }
+
   // Xóa luôn đơn hàng này khỏi Firestore để không bị "hồi sinh" qua real-time sync
   deleteDoc(doc(db, 'orders', orderId)).catch((err) => {
     console.error('Lỗi xóa đơn hàng trên Firestore:', err);
@@ -1048,6 +1205,15 @@ const filteredProducts = products.filter((p) => {
         onViewChange={handleViewChange}
         cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
         onCartClick={() => setCartOpen(true)}
+        wishlistCount={currentUser?.wishlist?.length || 0}
+        onWishlistClick={() => {
+          if (!currentUser) {
+            setAuthModalMessage('Vui lòng đăng nhập để xem danh sách yêu thích.');
+            setIsAuthModalOpen(true);
+            return;
+          }
+          setWishlistOpen(true);
+        }}
         activeSection={activeSection}
         onSectionClick={(id) => setActiveSection(id)}
         currentUser={currentUser}
@@ -1114,6 +1280,8 @@ const filteredProducts = products.filter((p) => {
                       onAddToCart={(p) => handleAddToCart(p, 1)}
                       onQuickOrder={handleQuickOrder}
                       onOpenDetails={setSelectedProduct}
+                      isWishlisted={(currentUser?.wishlist || []).includes(product.id)}
+                      onToggleWishlist={handleToggleWishlist}
                     />
                   ))}
                 </div>
@@ -1407,6 +1575,10 @@ const filteredProducts = products.filter((p) => {
                 onDeleteContactMessage={handleDeleteContactMessage}
                 onLogout={handleLogout}
                 onDeleteOrder={handleDeleteOrder}
+                coupons={coupons}
+                onAddCoupon={handleAddCoupon}
+                onUpdateCoupon={handleUpdateCoupon}
+                onDeleteCoupon={handleDeleteCoupon}
               />
             ) : (
               <AdminLogin
@@ -1558,6 +1730,7 @@ const filteredProducts = products.filter((p) => {
         cartItems={cartItems}
         onUpdateQuantity={handleUpdateCartQuantity}
         onRemoveItem={handleRemoveCartItem}
+        coupons={coupons}
         onCheckout={(code, amt) => {
           if (!currentUser) {
             setCartOpen(false);
@@ -1565,8 +1738,32 @@ const filteredProducts = products.filter((p) => {
             setIsAuthModalOpen(true);
             return;
           }
+          setAppliedCoupon(code, amt);
           setCartOpen(false);
           setCheckoutOpen(true);
+        }}
+      />
+
+      {/* Wishlist Drawer */}
+      <WishlistDrawer
+        isOpen={wishlistOpen}
+        onClose={() => setWishlistOpen(false)}
+        products={products.filter(p => (currentUser?.wishlist || []).includes(p.id))}
+        onRemove={handleToggleWishlist}
+        onAddToCart={(p) => handleAddToCart(p, 1)}
+        onOpenDetails={(p) => { setSelectedProduct(p); setWishlistOpen(false); }}
+      />
+
+      {/* Wishlist Drawer */}
+      <WishlistDrawer
+        isOpen={wishlistOpen}
+        onClose={() => setWishlistOpen(false)}
+        products={products.filter(p => (currentUser?.wishlist || []).includes(p.id))}
+        onRemove={handleToggleWishlist}
+        onAddToCart={(p) => handleAddToCart(p, 1)}
+        onOpenDetails={(p) => {
+          setSelectedProduct(p);
+          setWishlistOpen(false);
         }}
       />
 
@@ -1577,8 +1774,8 @@ const filteredProducts = products.filter((p) => {
         cartItems={cartItems}
         subtotal={cartSubtotal}
         shippingFee={cartShippingFee}
-        discountAmount={cartItems.length > 0 ? (cartSubtotal > 150000 ? 15000 : 0) : 0}
-        discountCode={cartSubtotal > 150000 ? 'FREESHIP' : ''}
+        discountAmount={appliedDiscountAmount}
+        discountCode={appliedCouponCode}
         onPlaceOrder={handlePlaceOrder}
         currentUser={currentUser}
         users={users}
@@ -1610,6 +1807,8 @@ const filteredProducts = products.filter((p) => {
             onAddReview={handleAddReview}
             onAddToCart={(p, qty) => handleAddToCart(p, qty)}
             onQuickOrder={(p, qty) => handleQuickOrder(p, qty)}
+            isWishlisted={(currentUser?.wishlist || []).includes(selectedProduct.id)}
+            onToggleWishlist={handleToggleWishlist}
           />
         )}
       </AnimatePresence>

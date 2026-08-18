@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Trash2, ShoppingBag, ShieldCheck, Tag, Gift } from 'lucide-react';
-import { CartItem } from '../types';
+import { CartItem, Coupon } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CartDrawerProps {
@@ -10,13 +10,8 @@ interface CartDrawerProps {
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
   onCheckout: (discountCode: string, discountAmount: number) => void;
+  coupons: Coupon[];
 }
-
-const DISCOUNT_CODES: { [key: string]: { type: 'percent' | 'fixed'; value: number; label: string; minOrder?: number } } = {
-  'ANVATHE': { type: 'percent', value: 15, label: 'Giảm 15% tổng thực đơn' },
-  'FREETSHIP': { type: 'fixed', value: 15000, label: 'Miễn phí vận chuyển (giảm 15k)' },
-  'FOODIE50': { type: 'fixed', value: 50000, label: 'Tặng 50k cho đơn từ 200k', minOrder: 200000 }
-};
 
 export default function CartDrawer({
   isOpen,
@@ -24,7 +19,8 @@ export default function CartDrawer({
   cartItems,
   onUpdateQuantity,
   onRemoveItem,
-  onCheckout
+  onCheckout,
+  coupons
 }: CartDrawerProps) {
   const [promoCode, setPromoCode] = useState('');
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
@@ -42,43 +38,60 @@ export default function CartDrawer({
   const itemsSubtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
   const shippingFee = itemsSubtotal > 150000 || cartItems.length === 0 ? 0 : 15000;
 
+  const appliedCoupon = appliedCode ? coupons.find(c => c.id === appliedCode) : undefined;
+
   // Calculate discount
   let discountAmount = 0;
-  if (appliedCode && DISCOUNT_CODES[appliedCode]) {
-    const codeData = DISCOUNT_CODES[appliedCode];
-    if (codeData.type === 'percent') {
-      discountAmount = Math.round((itemsSubtotal * codeData.value) / 100);
+  if (appliedCoupon) {
+    if (appliedCoupon.discountType === 'percent') {
+      discountAmount = Math.round((itemsSubtotal * appliedCoupon.value) / 100);
+      if (appliedCoupon.maxDiscountAmount) {
+        discountAmount = Math.min(discountAmount, appliedCoupon.maxDiscountAmount);
+      }
     } else {
-      discountAmount = codeData.value;
+      discountAmount = appliedCoupon.value;
     }
+    // Không để giảm giá vượt quá tổng tiền hàng
+    discountAmount = Math.min(discountAmount, itemsSubtotal);
   }
 
   const grandTotal = Math.max(0, itemsSubtotal + shippingFee - discountAmount);
 
-  const handleApplyPromo = () => {
-    const code = promoCode.trim().toUpperCase();
+  const handleApplyPromo = (codeOverride?: string) => {
+    const code = (codeOverride ?? promoCode).trim().toUpperCase();
     if (!code) return;
 
-    if (DISCOUNT_CODES[code]) {
-      const info = DISCOUNT_CODES[code];
-      if (info.minOrder && itemsSubtotal < info.minOrder) {
-        setPromoMessage({
-          text: `Mã ${code} chỉ áp dụng cho đơn hàng từ ${formatPrice(info.minOrder)} trở lên.`,
-          type: 'error'
-        });
-        return;
-      }
-      setAppliedCode(code);
+    const coupon = coupons.find(c => c.id === code || c.code === code);
+
+    if (!coupon) {
+      setPromoMessage({ text: 'Mã giảm giá không hợp lệ hoặc đã hết hạn!', type: 'error' });
+      return;
+    }
+    if (!coupon.isActive) {
+      setPromoMessage({ text: `Mã "${code}" hiện đã ngừng áp dụng.`, type: 'error' });
+      return;
+    }
+    if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) {
+      setPromoMessage({ text: `Mã "${code}" đã hết hạn sử dụng.`, type: 'error' });
+      return;
+    }
+    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+      setPromoMessage({ text: `Mã "${code}" đã hết lượt sử dụng.`, type: 'error' });
+      return;
+    }
+    if (coupon.minOrderValue && itemsSubtotal < coupon.minOrderValue) {
       setPromoMessage({
-        text: `Đã áp dụng mã "${code}": ${info.label}!`,
-        type: 'success'
-      });
-    } else {
-      setPromoMessage({
-        text: 'Mã giảm giá không hợp lệ hoặc đã hết hạn!',
+        text: `Mã "${code}" chỉ áp dụng cho đơn hàng từ ${formatPrice(coupon.minOrderValue)} trở lên.`,
         type: 'error'
       });
+      return;
     }
+
+    setAppliedCode(coupon.id);
+    const label = coupon.discountType === 'percent'
+      ? `Giảm ${coupon.value}%${coupon.maxDiscountAmount ? ` (tối đa ${formatPrice(coupon.maxDiscountAmount)})` : ''}`
+      : `Giảm ${formatPrice(coupon.value)}`;
+    setPromoMessage({ text: `Đã áp dụng mã "${code}": ${label}!`, type: 'success' });
   };
 
   const handleRemovePromo = () => {
@@ -228,7 +241,7 @@ export default function CartDrawer({
                           <Tag className="absolute left-3.5 top-2.5 h-4 w-4 text-gray-400" />
                           <input
                             type="text"
-                            placeholder="Mã giảm giá (AURAGIFT, FREESHIP...)"
+                            placeholder="Nhập mã giảm giá..."
                             value={promoCode}
                             disabled={appliedCode !== null}
                             onChange={(e) => setPromoCode(e.target.value)}
@@ -244,7 +257,7 @@ export default function CartDrawer({
                           </button>
                         ) : (
                           <button
-                            onClick={handleApplyPromo}
+                            onClick={() => handleApplyPromo()}
                             className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-gray-800 transition-colors"
                           >
                             Áp dụng
@@ -261,21 +274,20 @@ export default function CartDrawer({
                         </p>
                       )}
 
-                      {!appliedCode && (
+                      {!appliedCode && coupons.filter(c => c.isActive && (!c.expiresAt || new Date(c.expiresAt).getTime() >= Date.now()) && (!c.usageLimit || c.usedCount < c.usageLimit)).length > 0 && (
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                          {Object.keys(DISCOUNT_CODES).map((code) => (
+                          {coupons
+                            .filter(c => c.isActive && (!c.expiresAt || new Date(c.expiresAt).getTime() >= Date.now()) && (!c.usageLimit || c.usedCount < c.usageLimit))
+                            .map((c) => (
                             <button
-                              key={code}
+                              key={c.id}
                               onClick={() => {
-                                setPromoCode(code);
-                                // Automatically apply next frame
-                                setTimeout(() => {
-                                  setPromoCode(code);
-                                }, 0);
+                                setPromoCode(c.code);
+                                handleApplyPromo(c.code);
                               }}
                               className="text-[9px] font-black border border-gray-200 bg-white hover:bg-gray-100 text-gray-800 rounded-lg px-2 py-1 whitespace-nowrap"
                             >
-                              {code}
+                              {c.code}
                             </button>
                           ))}
                         </div>

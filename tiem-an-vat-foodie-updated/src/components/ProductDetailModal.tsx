@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Star, MessageSquare, Send, ShoppingCart, Calendar, CornerDownRight, TrendingUp, Sparkles, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Star, MessageSquare, Send, ShoppingCart, Calendar, CornerDownRight, TrendingUp, Sparkles, CheckCircle2, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { Product, Review } from '../types';
 import { motion } from 'motion/react';
 
@@ -11,6 +11,8 @@ interface ProductDetailModalProps {
   onAddReview: (productId: string, userName: string, rating: number, comment: string) => void;
   onAddToCart: (product: Product, quantity: number) => void;
   onQuickOrder: (product: Product, quantity: number) => void;
+  isWishlisted?: boolean;
+  onToggleWishlist?: (productId: string) => void;
 }
 
 export default function ProductDetailModal({
@@ -20,7 +22,9 @@ export default function ProductDetailModal({
   reviews,
   onAddReview,
   onAddToCart,
-  onQuickOrder
+  onQuickOrder,
+  isWishlisted = false,
+  onToggleWishlist
 }: ProductDetailModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [userName, setUserName] = useState('');
@@ -151,6 +155,21 @@ export default function ProductDetailModal({
           >
             <X className="h-5 w-5" />
           </button>
+
+          {/* Wishlist button */}
+          {onToggleWishlist && (
+            <button
+              onClick={() => onToggleWishlist(product.id)}
+              className={`absolute top-4 right-16 z-20 p-2 rounded-full shadow-md border transition-all active:scale-90 ${
+                isWishlisted
+                  ? 'bg-rose-600 border-rose-600 text-white'
+                  : 'bg-white/90 hover:bg-white border-gray-100 text-gray-500 hover:text-rose-600'
+              }`}
+              aria-label="Yêu thích"
+            >
+              <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-white' : ''}`} />
+            </button>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-12 min-h-[500px]">
             
