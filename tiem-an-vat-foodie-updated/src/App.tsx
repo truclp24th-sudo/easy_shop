@@ -39,6 +39,8 @@ export default function App() {
   const [activeSection, setActiveSection] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'under100k' | '100k-300k' | 'over300k'>('all');
+  const [sortOrder, setSortOrder] = useState<'default' | 'price-asc' | 'price-desc' | 'best-selling'>('default');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState('');
   const [selectedNewsArticle, setSelectedNewsArticle] = useState<any | null>(null);
@@ -1177,19 +1179,32 @@ const handleDeleteOrder = (orderId: string) => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const filteredProducts = products.filter((p) => {
-  const keyword = normalize(searchQuery);
+const filteredProducts = products
+  .filter((p) => {
+    const keyword = normalize(searchQuery);
 
-  const matchesSearch =
-    normalize(p.name).includes(keyword) ||
-    normalize(p.description).includes(keyword) ||
-    normalize(p.category).includes(keyword);
+    const matchesSearch =
+      normalize(p.name).includes(keyword) ||
+      normalize(p.description).includes(keyword) ||
+      normalize(p.category).includes(keyword);
 
-  const matchesCategory =
-    selectedCategory === "all" || p.category === selectedCategory;
+    const matchesCategory =
+      selectedCategory === "all" || p.category === selectedCategory;
 
-  return matchesSearch && matchesCategory;
-});
+    const matchesPrice =
+      priceFilter === 'all' ? true :
+      priceFilter === 'under100k' ? p.price < 100000 :
+      priceFilter === '100k-300k' ? p.price >= 100000 && p.price <= 300000 :
+      priceFilter === 'over300k' ? p.price > 300000 : true;
+
+    return matchesSearch && matchesCategory && matchesPrice;
+  })
+  .sort((a, b) => {
+    if (sortOrder === 'price-asc') return a.price - b.price;
+    if (sortOrder === 'price-desc') return b.price - a.price;
+    if (sortOrder === 'best-selling') return b.soldCount - a.soldCount;
+    return 0; // 'default' - giữ nguyên thứ tự gốc
+  });
 
   const cartSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const cartShippingFee = cartSubtotal > 150000 || cartItems.length === 0 ? 0 : 15000;
@@ -1244,7 +1259,7 @@ const filteredProducts = products.filter((p) => {
 
             {/* Product Grid Section */}
             <section id="products" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto scroll-mt-10">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-12 gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
                 <div className="space-y-2">
                   <h2 className="text-3xl font-serif font-black text-gray-950 tracking-tight flex items-center gap-2">
                     <Sparkles className="h-6 w-6 text-gray-950" />
@@ -1256,6 +1271,43 @@ const filteredProducts = products.filter((p) => {
                 </div>
               </div>
 
+              {/* Bộ lọc giá + Sắp xếp */}
+              <div className="flex flex-wrap items-center gap-3 mb-8" id="product-filters-bar">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Lọc theo giá:</span>
+                {([
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'under100k', label: 'Dưới 100K' },
+                  { key: '100k-300k', label: '100K - 300K' },
+                  { key: 'over300k', label: 'Trên 300K' }
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setPriceFilter(opt.key)}
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+                      priceFilter === opt.key
+                        ? 'bg-gray-950 text-white border-gray-950'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+
+                <div className="flex-1 hidden sm:block" />
+
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Sắp xếp:</span>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
+                  className="px-3.5 py-1.5 rounded-full text-[11px] font-bold border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-hidden focus:border-gray-400"
+                >
+                  <option value="default">Mặc định</option>
+                  <option value="price-asc">Giá: Thấp đến cao</option>
+                  <option value="price-desc">Giá: Cao đến thấp</option>
+                  <option value="best-selling">Bán chạy nhất</option>
+                </select>
+              </div>
+
               {/* Grid Layout */}
               {filteredProducts.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-3xl border border-gray-250 p-8 max-w-md mx-auto space-y-4">
@@ -1263,7 +1315,7 @@ const filteredProducts = products.filter((p) => {
                   <p className="text-sm font-extrabold text-gray-800">Không tìm thấy sản phẩm bạn đang tìm kiếm!</p>
                   <p className="text-xs text-gray-400">Vui lòng thử tìm bằng từ khóa khác hoặc chọn danh mục khác.</p>
                   <button
-                    onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                    onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setPriceFilter('all'); }}
                     className="py-2.5 px-6 rounded-xl bg-gray-950 text-white font-bold text-xs uppercase cursor-pointer"
                   >
                     Xem tất cả sản phẩm
@@ -1807,6 +1859,10 @@ const filteredProducts = products.filter((p) => {
             onQuickOrder={(p, qty) => handleQuickOrder(p, qty)}
             isWishlisted={(currentUser?.wishlist || []).includes(selectedProduct.id)}
             onToggleWishlist={handleToggleWishlist}
+            relatedProducts={products
+              .filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id)
+              .slice(0, 4)}
+            onSelectRelatedProduct={(p) => setSelectedProduct(p)}
           />
         )}
       </AnimatePresence>
