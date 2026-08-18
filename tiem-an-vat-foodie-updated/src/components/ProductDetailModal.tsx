@@ -13,6 +13,9 @@ interface ProductDetailModalProps {
   onQuickOrder: (product: Product, quantity: number) => void;
   isWishlisted?: boolean;
   onToggleWishlist?: (productId: string) => void;
+  // Sản phẩm liên quan (cùng danh mục) để gợi ý khách xem thêm.
+  relatedProducts?: Product[];
+  onSelectRelatedProduct?: (product: Product) => void;
 }
 
 export default function ProductDetailModal({
@@ -24,7 +27,9 @@ export default function ProductDetailModal({
   onAddToCart,
   onQuickOrder,
   isWishlisted = false,
-  onToggleWishlist
+  onToggleWishlist,
+  relatedProducts = [],
+  onSelectRelatedProduct
 }: ProductDetailModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [userName, setUserName] = useState('');
@@ -50,11 +55,14 @@ export default function ProductDetailModal({
     setActiveImageIdx(prev => (prev === allImages.length - 1 ? 0 : prev + 1));
   };
 
+  const modalScrollRef = React.useRef<HTMLDivElement>(null);
+
   React.useEffect(() => {
   if (isOpen) {
     setIsDescExpanded(false);
     setQuantity(1);
     setActiveImageIdx(0);
+    modalScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
 
     // Nếu mở từ email thì tự cuộn xuống phần đánh giá
     const params = new URLSearchParams(window.location.search);
@@ -129,7 +137,7 @@ export default function ProductDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div ref={modalScrollRef} className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         <div 
@@ -495,6 +503,51 @@ export default function ProductDetailModal({
             </div>
 
           </div>
+
+          {/* Sản phẩm liên quan */}
+          {relatedProducts.length > 0 && (
+            <div className="border-t border-gray-100 bg-gray-50/60 p-5 sm:p-6">
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 mb-4">Sản phẩm liên quan</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {relatedProducts.map((rp) => {
+                  const rpInStock = rp.isAvailable && (rp.stock ?? 0) > 0;
+                  const rpDiscount = rp.originalPrice && rp.originalPrice > rp.price
+                    ? Math.round(((rp.originalPrice - rp.price) / rp.originalPrice) * 100)
+                    : 0;
+                  return (
+                    <button
+                      key={rp.id}
+                      onClick={() => onSelectRelatedProduct?.(rp)}
+                      className="text-left bg-white rounded-2xl border border-gray-150 hover:border-gray-300 hover:shadow-md transition-all overflow-hidden group cursor-pointer"
+                    >
+                      <div className="aspect-square bg-gray-100 relative overflow-hidden">
+                        <img
+                          src={rp.image}
+                          alt={rp.name}
+                          referrerPolicy="no-referrer"
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {!rpInStock && (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                            <span className="text-white text-[9px] font-black uppercase px-2 py-1 border border-white rounded-lg">Hết hàng</span>
+                          </div>
+                        )}
+                        {rpDiscount > 0 && (
+                          <span className="absolute top-2 left-2 bg-gray-950 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">-{rpDiscount}%</span>
+                        )}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="text-[11px] font-bold text-gray-900 line-clamp-2 leading-snug min-h-[28px]">{rp.name}</p>
+                        <p className="text-xs font-black text-gray-950 mt-1.5">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(rp.price)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
