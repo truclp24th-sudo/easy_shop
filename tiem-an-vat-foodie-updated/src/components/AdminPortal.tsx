@@ -1679,8 +1679,8 @@ export default function AdminPortal({
               </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[720px]">
                 <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider text-[10px] font-black">
                   <tr>
                     <th className="p-4">Mã</th>
