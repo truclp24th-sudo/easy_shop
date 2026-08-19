@@ -3,7 +3,7 @@ import {
   getProducts, getReviews, getOrders, getContactMessages, saveLocalData, CATEGORIES 
 } from './data';
 import { db } from './firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, deleteField, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon, Category } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -14,6 +14,7 @@ import WishlistDrawer from './components/WishlistDrawer';
 import ProductCardSkeleton from './components/ProductCardSkeleton';
 import NotFoundView from './components/NotFoundView';
 import ShipperPortal from './components/ShipperPortal';
+import OrderTrackingModal from './components/OrderTrackingModal';
 import CheckoutModal from './components/CheckoutModal';
 import ContactSection from './components/ContactSection';
 import AdminPortal from './components/AdminPortal';
@@ -209,6 +210,7 @@ export default function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [productNotFound, setProductNotFound] = useState(false);
+  const [isOrderTrackingOpen, setIsOrderTrackingOpen] = useState(false);
 
   // Load database on mount and listen to custom admin routing
   useEffect(() => {
@@ -531,7 +533,18 @@ if (productId) {
       // Ghi từng đơn hàng lên Firestore để đồng bộ real-time giữa mọi thiết bị.
       // (onSnapshot ở trên sẽ tự động cập nhật lại state khi ghi thành công)
       newOrders.forEach((order) => {
-        setDoc(doc(db, 'orders', order.id), order, { merge: true }).catch((err) => {
+        // QUAN TRỌNG: vì Firestore đang bật ignoreUndefinedProperties (để tránh crash khi field
+        // trống - xem firebase.ts), các trường có giá trị "undefined" sẽ bị ÂM THẦM BỎ QUA khi
+        // ghi thay vì bị xóa - nghĩa là setDoc({..., shipperName: undefined}, {merge:true}) sẽ
+        // KHÔNG xóa được shipperName cũ trên Firestore. Phải chuyển undefined -> deleteField()
+        // để yêu cầu Firestore THỰC SỰ xóa trường đó.
+        const payload: Record<string, unknown> = { ...order };
+        Object.keys(payload).forEach((key) => {
+          if (payload[key] === undefined) {
+            payload[key] = deleteField();
+          }
+        });
+        setDoc(doc(db, 'orders', order.id), payload, { merge: true }).catch((err) => {
           console.error('Lỗi đồng bộ đơn hàng lên Firestore:', err);
         });
       });
@@ -981,7 +994,10 @@ syncOrders(prev => [newOrder, ...prev]);
 const handleUpdateOrderStatus = (
   orderId: string,
   status: Order['orderStatus'],
-  paymentStatus?: Order['paymentStatus']
+  paymentStatus?: Order['paymentStatus'],
+  // Cho phép cập nhật thêm các trường khác (VD: tên/SĐT shipper) TRONG CÙNG một lần ghi
+  // duy nhất, để tránh race-condition giữa 2 lần ghi Firestore tách rời (xem handleClaimOrder).
+  extraFields?: Partial<Order>
 ) => {
 
   const previousOrder = orders.find(o => o.id === orderId);
@@ -999,6 +1015,7 @@ const handleUpdateOrderStatus = (
       }
       return {
         ...o,
+        ...extraFields,
         orderStatus: status,
         paymentStatus: paymentStatus || o.paymentStatus,
         stockDeducted
@@ -1145,10 +1162,9 @@ const handleClaimOrder = (orderId: string, shipperName: string, shipperPhone: st
     return;
   }
 
-  syncOrders(prev => prev.map(o =>
-    o.id === orderId ? { ...o, shipperName, shipperPhone } : o
-  ));
-  handleUpdateOrderStatus(orderId, 'DELIVERING');
+  // Gắn tên/SĐT shipper VÀ đổi trạng thái trong CÙNG một lần ghi duy nhất (atomic),
+  // tránh race-condition giữa 2 lần ghi Firestore tách rời.
+  handleUpdateOrderStatus(orderId, 'DELIVERING', undefined, { shipperName, shipperPhone });
 };
 
 // Shipper xác nhận đã giao hàng thành công -> đơn chuyển "COMPLETED", tái sử dụng toàn bộ
@@ -1158,12 +1174,9 @@ const handleShipperCompleteDelivery = (orderId: string) => {
 };
 
 // Shipper trả lại đơn (bận đột xuất, xe hỏng...) -> đơn quay về pool "PREPARING" cho
-// shipper khác nhận, đồng thời gỡ tên shipper cũ ra khỏi đơn.
+// shipper khác nhận, đồng thời gỡ tên shipper cũ ra khỏi đơn (trong cùng 1 lần ghi).
 const handleReleaseOrder = (orderId: string) => {
-  syncOrders(prev => prev.map(o =>
-    o.id === orderId ? { ...o, shipperName: undefined, shipperPhone: undefined } : o
-  ));
-  handleUpdateOrderStatus(orderId, 'PREPARING');
+  handleUpdateOrderStatus(orderId, 'PREPARING', undefined, { shipperName: undefined, shipperPhone: undefined });
 };
 
 // ================= Tự động xử lý đơn hàng theo thời gian =================
@@ -1383,6 +1396,7 @@ const filteredProducts = products
           setAuthModalMessage('');
           setIsAuthModalOpen(true);
         }}
+        onTrackOrderClick={() => setIsOrderTrackingOpen(true)}
       />
 
       <AnimatePresence mode="wait">
@@ -1980,17 +1994,11 @@ const filteredProducts = products
         onOpenDetails={(p) => { setSelectedProduct(p); setWishlistOpen(false); }}
       />
 
-      {/* Wishlist Drawer */}
-      <WishlistDrawer
-        isOpen={wishlistOpen}
-        onClose={() => setWishlistOpen(false)}
-        products={products.filter(p => (currentUser?.wishlist || []).includes(p.id))}
-        onRemove={handleToggleWishlist}
-        onAddToCart={(p) => handleAddToCart(p, 1)}
-        onOpenDetails={(p) => {
-          setSelectedProduct(p);
-          setWishlistOpen(false);
-        }}
+      {/* Order Tracking Modal - tra cứu công khai, không cần đăng nhập */}
+      <OrderTrackingModal
+        isOpen={isOrderTrackingOpen}
+        onClose={() => setIsOrderTrackingOpen(false)}
+        orders={orders}
       />
 
       {/* Checkout Modal */}
