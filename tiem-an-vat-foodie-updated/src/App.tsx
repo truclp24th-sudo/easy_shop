@@ -13,6 +13,7 @@ import CartDrawer from './components/CartDrawer';
 import WishlistDrawer from './components/WishlistDrawer';
 import ProductCardSkeleton from './components/ProductCardSkeleton';
 import NotFoundView from './components/NotFoundView';
+import ShipperPortal from './components/ShipperPortal';
 import CheckoutModal from './components/CheckoutModal';
 import ContactSection from './components/ContactSection';
 import AdminPortal from './components/AdminPortal';
@@ -29,7 +30,11 @@ import zaloQR from "./assets/images/zaloQR.jpg";
 // ĐANG ĐỂ CHẾ ĐỘ DEMO: mỗi bước cách nhau 10 giây. Khi triển khai thật, đổi số mili-giây bên dưới
 // (vd: 10 * 60 * 1000 cho 10 phút/bước, hoặc vài giờ/bước tuỳ tốc độ chuẩn bị - vận chuyển thực tế).
 const AUTO_STEP_INTERVAL_MS = 10 * 1000; // 10 giây / bước (demo)
-const ORDER_STATUS_FLOW: Order['orderStatus'][] = ['RECEIVED', 'PREPARING', 'DELIVERING', 'COMPLETED'];
+// LƯU Ý: chỉ tự động chuyển tới 'PREPARING' (đang chuẩn bị hàng trong kho).
+// Từ 'PREPARING' -> 'DELIVERING' bắt buộc phải có SHIPPER THẬT tự nhận đơn qua Cổng Shipper,
+// và từ 'DELIVERING' -> 'COMPLETED' bắt buộc shipper xác nhận đã giao thành công.
+// Điều này đảm bảo trạng thái đơn hàng phản ánh đúng thực tế, không còn "giả lập" toàn bộ quy trình.
+const ORDER_STATUS_FLOW: Order['orderStatus'][] = ['RECEIVED', 'PREPARING'];
 
 // Thời gian dự kiến giao hàng hiển thị cho khách (tính từ lúc đặt đơn).
 // Mặc định: 1 ngày sau khi đặt hàng. Có thể đổi thành số giờ/ngày khác tuỳ nhu cầu thực tế của shop.
@@ -37,7 +42,7 @@ const ESTIMATED_DELIVERY_MS = 24 * 60 * 60 * 1000; // 24 giờ
 
 export default function App() {
   // Master state
-  const [currentView, setCurrentView] = useState<'client' | 'admin'>('client');
+  const [currentView, setCurrentView] = useState<'client' | 'admin' | 'shipper'>('client');
   const [activeSection, setActiveSection] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -255,9 +260,12 @@ if (productId) {
       const path = window.location.pathname;
       const hash = window.location.hash;
       const isAdmin = path.includes('/admin') || hash === '#admin';
+      const isShipper = path.includes('/shipper') || hash === '#shipper';
       setIsAdminPath(isAdmin);
       if (isAdmin) {
         setCurrentView('admin');
+      } else if (isShipper) {
+        setCurrentView('shipper');
       } else {
         setCurrentView('client');
       }
@@ -1125,10 +1133,45 @@ const handleUpdateOrderStatus = (
 
 };
 
+// ================= Cổng Shipper: tự nhận đơn & giao hàng =================
+// Shipper chỉ được nhận các đơn đang ở trạng thái "PREPARING" (đã chuẩn bị xong, sẵn sàng giao)
+// và CHƯA có shipper nào khác nhận. Sau khi nhận, đơn chuyển sang "DELIVERING" và gắn tên/SĐT
+// shipper vào đơn để admin + khách hàng đều biết ai đang giao.
+const handleClaimOrder = (orderId: string, shipperName: string, shipperPhone: string) => {
+  const target = orders.find(o => o.id === orderId);
+  if (!target) return;
+  if (target.orderStatus !== 'PREPARING') {
+    window.alert('Đơn này không còn sẵn sàng để nhận nữa (có thể đã được shipper khác nhận trước).');
+    return;
+  }
+
+  syncOrders(prev => prev.map(o =>
+    o.id === orderId ? { ...o, shipperName, shipperPhone } : o
+  ));
+  handleUpdateOrderStatus(orderId, 'DELIVERING');
+};
+
+// Shipper xác nhận đã giao hàng thành công -> đơn chuyển "COMPLETED", tái sử dụng toàn bộ
+// logic có sẵn của handleUpdateOrderStatus (cộng soldCount, gửi email, trừ điểm thành viên...).
+const handleShipperCompleteDelivery = (orderId: string) => {
+  handleUpdateOrderStatus(orderId, 'COMPLETED', 'PAID');
+};
+
+// Shipper trả lại đơn (bận đột xuất, xe hỏng...) -> đơn quay về pool "PREPARING" cho
+// shipper khác nhận, đồng thời gỡ tên shipper cũ ra khỏi đơn.
+const handleReleaseOrder = (orderId: string) => {
+  syncOrders(prev => prev.map(o =>
+    o.id === orderId ? { ...o, shipperName: undefined, shipperPhone: undefined } : o
+  ));
+  handleUpdateOrderStatus(orderId, 'PREPARING');
+};
+
 // ================= Tự động xử lý đơn hàng theo thời gian =================
-// Thay vì nhân viên phải bấm tay từng bước (Xác nhận -> Giao vận chuyển -> Hoàn thành),
-// hệ thống tự kiểm tra định kỳ và tự chuyển trạng thái đơn hàng theo mốc thời gian kể từ
-// lúc đặt hàng. Trang "Đơn hàng" của khách (UserAuthModal) đang lắng nghe cùng dữ liệu
+// Đơn mới sẽ tự động chuyển từ "Chờ xác nhận" -> "Đang chuẩn bị hàng" sau một khoảng thời gian,
+// mô phỏng việc kho xác nhận và soạn hàng. Từ bước này trở đi, đơn hàng cần một SHIPPER THẬT
+// tự nhận đơn (qua Cổng Shipper) để chuyển sang "Đang giao", và shipper xác nhận đã giao để
+// chuyển sang "Hoàn thành" - không còn tự động giả lập những bước có người thật tham gia nữa.
+// Trang "Đơn hàng" của khách (UserAuthModal) đang lắng nghe cùng dữ liệu
 // `orders` real-time qua Firestore, nên sẽ tự cập nhật ngay khi trạng thái thay đổi ở đây -
 // không cần khách bấm F5. Nút bấm thủ công trong AdminPortal vẫn hoạt động bình thường,
 // nhân viên có thể xử lý tay hoặc ghi đè bất cứ lúc nào (ví dụ giao gấp, xử lý ngoại lệ...).
@@ -1297,6 +1340,23 @@ const filteredProducts = products
 
   const cartSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const cartShippingFee = cartSubtotal > 150000 || cartItems.length === 0 ? 0 : 15000;
+
+  // Cổng Shipper là một giao diện độc lập, tách biệt hoàn toàn khỏi Header/Footer của shop
+  // (giống một app giao hàng riêng), nên render sớm ở đây trước khi vào layout chính.
+  if (currentView === 'shipper') {
+    return (
+      <ShipperPortal
+        orders={orders}
+        onClaimOrder={handleClaimOrder}
+        onCompleteDelivery={handleShipperCompleteDelivery}
+        onReleaseOrder={handleReleaseOrder}
+        onGoHome={() => {
+          window.history.replaceState({}, '', '/');
+          setCurrentView('client');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-gray-800 flex flex-col font-sans selection:bg-gray-950 selection:text-white">

@@ -53,6 +53,9 @@ export interface Order {
   // Mã giảm giá đã áp dụng cho đơn này (nếu có).
   couponCode?: string;
   discountAmount?: number;
+  // Shipper đang phụ trách giao đơn này (tự nhận đơn qua Cổng Shipper).
+  shipperName?: string;
+  shipperPhone?: string;
   // Ngày giờ dự kiến giao hàng tới khách (ISO string), tính tự động khi tạo đơn.
   estimatedDeliveryAt?: string;
   // Đánh dấu đơn này ĐÃ thực sự trừ tồn kho lúc đặt hàng hay chưa.
