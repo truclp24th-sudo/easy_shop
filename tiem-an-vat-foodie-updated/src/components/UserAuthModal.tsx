@@ -435,6 +435,19 @@ export default function UserAuthModal({
                                   </div>
                                 </div>
                               )}
+
+                              {/* Thông tin shipper đang giao (nếu có) */}
+                              {order.orderStatus === 'DELIVERING' && order.shipperName && (
+                                <div className="mt-3 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                                  <Truck className="h-4 w-4 text-blue-600 shrink-0" />
+                                  <p className="text-[11px] text-blue-800 font-semibold">
+                                    Shipper <span className="font-black">{order.shipperName}</span> đang giao hàng cho bạn
+                                    {order.shipperPhone && (
+                                      <> · <a href={`tel:${order.shipperPhone}`} className="underline">{order.shipperPhone}</a></>
+                                    )}
+                                  </p>
+                                </div>
+                              )}
                             </div>
 
                             {/* Thời gian dự kiến giao hàng */}

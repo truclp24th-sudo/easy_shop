@@ -448,6 +448,14 @@ export default function AdminPortal({
 
         {/* Action button to trigger Add Product / Logout */}
         <div className="flex gap-2">
+          <button
+            onClick={() => window.open('/shipper', '_blank')}
+            className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase transition-colors cursor-pointer"
+            title="Mở Cổng Shipper ở tab mới - gửi link này cho shipper để họ tự nhận đơn"
+          >
+            <Truck className="h-4 w-4" /> Cổng Shipper
+          </button>
+
           {activeTab === 'products' && !isAddingNew && !editingProductId && (
             <button
               onClick={() => {
@@ -1056,6 +1064,11 @@ export default function AdminPortal({
                             <MapPin className="h-3.5 w-3.5 shrink-0" /> {o.customerAddress}
                           </span>
                         </div>
+                        {o.shipperName && (o.orderStatus === 'DELIVERING' || o.orderStatus === 'COMPLETED') && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 mt-1">
+                            <Truck className="h-3 w-3" /> Shipper: {o.shipperName} ({o.shipperPhone})
+                          </div>
+                        )}
                       </div>
 
                       {/* Statuses badges */}
