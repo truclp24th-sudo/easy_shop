@@ -11,6 +11,8 @@ import ProductCard from './components/ProductCard';
 import ProductDetailModal from './components/ProductDetailModal';
 import CartDrawer from './components/CartDrawer';
 import WishlistDrawer from './components/WishlistDrawer';
+import ProductCardSkeleton from './components/ProductCardSkeleton';
+import NotFoundView from './components/NotFoundView';
 import CheckoutModal from './components/CheckoutModal';
 import ContactSection from './components/ContactSection';
 import AdminPortal from './components/AdminPortal';
@@ -200,6 +202,8 @@ export default function App() {
     setAppliedDiscountAmount(amount);
   };
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [productNotFound, setProductNotFound] = useState(false);
 
   // Load database on mount and listen to custom admin routing
   useEffect(() => {
@@ -232,6 +236,9 @@ if (productId) {
 
   if (product) {
     setSelectedProduct(product);
+  } else {
+    // Link chia sẻ trỏ tới sản phẩm không tồn tại (đã bị xóa hoặc sai đường dẫn) -> hiện trang báo lỗi.
+    setProductNotFound(true);
   }
 
 }
@@ -239,6 +246,10 @@ if (productId) {
     setReviews(getReviews());
     setOrders(getOrders());
     setContactMessages(getContactMessages());
+
+    // Tắt trạng thái loading ban đầu sau khi đã có dữ liệu để tránh giao diện "giật"
+    // (Firestore real-time vẫn tiếp tục đồng bộ ngầm phía sau qua onSnapshot).
+    setTimeout(() => setIsInitialLoading(false), 400);
 
     const checkPath = () => {
       const path = window.location.pathname;
@@ -1325,6 +1336,20 @@ const filteredProducts = products
             exit={{ opacity: 0 }}
             className="flex-1"
           >
+            {productNotFound ? (
+              <NotFoundView
+                onGoHome={() => {
+                  setProductNotFound(false);
+                  window.history.replaceState({}, '', window.location.pathname);
+                }}
+                onBrowseProducts={() => {
+                  setProductNotFound(false);
+                  window.history.replaceState({}, '', window.location.pathname);
+                  setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                }}
+              />
+            ) : (
+              <>
             {/* Hero / Filter Section */}
             <div id="home" className="scroll-mt-20">
               <Hero
@@ -1388,7 +1413,13 @@ const filteredProducts = products
               </div>
 
               {/* Grid Layout */}
-              {filteredProducts.length === 0 ? (
+              {isInitialLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <ProductCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-3xl border border-gray-250 p-8 max-w-md mx-auto space-y-4">
                   <p className="text-3xl">✨</p>
                   <p className="text-sm font-extrabold text-gray-800">Không tìm thấy sản phẩm bạn đang tìm kiếm!</p>
@@ -1675,6 +1706,8 @@ const filteredProducts = products
               )}
             </AnimatePresence>
 
+              </>
+            )}
           </motion.main>
         ) : (
           
