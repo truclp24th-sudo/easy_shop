@@ -230,8 +230,8 @@ export default function UserAuthModal({
                       : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
                 >
-                  <ShoppingBag className="h-3.5 w-3.5" />
-                  Đơn Hàng ({orders.filter(o => o.customerPhone === currentUser.phone).length})
+                  <Truck className="h-3.5 w-3.5" />
+                  Theo Dõi Đơn Hàng ({orders.filter(o => o.customerPhone === currentUser.phone).length})
                 </button>
               </div>
 

@@ -1128,9 +1128,19 @@ export default function AdminPortal({
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-left">Tiến độ giao dịch:</p>
-                            {o.orderStatus !== 'CANCELLED' && o.orderStatus !== 'COMPLETED' && (
+                            {o.orderStatus === 'RECEIVED' && (
                               <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-150 px-1.5 py-0.5 rounded-md">
                                 ⚡ Tự động xử lý
+                              </span>
+                            )}
+                            {o.orderStatus === 'PREPARING' && (
+                              <span className="text-[9px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-150 px-1.5 py-0.5 rounded-md">
+                                🚚 Chờ shipper nhận
+                              </span>
+                            )}
+                            {o.orderStatus === 'DELIVERING' && (
+                              <span className="text-[9px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-150 px-1.5 py-0.5 rounded-md">
+                                🚚 Shipper đang giao
                               </span>
                             )}
                           </div>
@@ -1204,7 +1214,7 @@ export default function AdminPortal({
                             </div>
                           )}
 
-                          <div className="flex justify-end gap-1.5 flex-wrap pt-1.5">
+                          <div className="flex justify-end gap-1.5 flex-wrap items-center pt-1.5">
                             {o.orderStatus === 'RECEIVED' && (
                               <button
                                 onClick={() => onUpdateOrderStatus(o.id, 'PREPARING')}
@@ -1214,20 +1224,44 @@ export default function AdminPortal({
                               </button>
                             )}
                             {o.orderStatus === 'PREPARING' && (
-                              <button
-                                onClick={() => onUpdateOrderStatus(o.id, 'DELIVERING')}
-                                className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-xl cursor-pointer shadow-xs transition-transform hover:-translate-y-0.5 active:translate-y-0"
-                              >
-                                Giao cho vận chuyển
-                              </button>
+                              <div className="flex items-center gap-2 flex-wrap justify-end">
+                                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-150 px-2.5 py-2 rounded-xl flex items-center gap-1">
+                                  <Truck className="h-3.5 w-3.5" /> Đang chờ shipper tự nhận đơn qua Cổng Shipper
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Xác nhận GÁN THỦ CÔNG đơn này sang trạng thái "Đang giao" mà KHÔNG qua Cổng Shipper? Chỉ dùng khi bạn tự giao hàng hoặc xử lý ngoại lệ.')) {
+                                      onUpdateOrderStatus(o.id, 'DELIVERING');
+                                    }
+                                  }}
+                                  className="py-1.5 px-2.5 text-[9px] font-bold uppercase text-gray-400 hover:text-gray-700 underline decoration-dotted cursor-pointer"
+                                >
+                                  Gán thủ công
+                                </button>
+                              </div>
                             )}
                             {o.orderStatus === 'DELIVERING' && (
-                              <button
-                                onClick={() => onUpdateOrderStatus(o.id, 'COMPLETED', 'PAID')}
-                                className="py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase rounded-xl cursor-pointer shadow-xs transition-transform hover:-translate-y-0.5 active:translate-y-0"
-                              >
-                                Giao hàng thành công
-                              </button>
+                              <div className="flex items-center gap-2 flex-wrap justify-end">
+                                {o.shipperName ? (
+                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-150 px-2.5 py-2 rounded-xl flex items-center gap-1">
+                                    <Truck className="h-3.5 w-3.5" /> Shipper {o.shipperName} ({o.shipperPhone}) đang giao
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-150 px-2.5 py-2 rounded-xl flex items-center gap-1">
+                                    <Truck className="h-3.5 w-3.5" /> Đang giao (chưa gắn shipper)
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Xác nhận đơn này ĐÃ GIAO THÀNH CÔNG (thủ công, không qua Cổng Shipper)?')) {
+                                      onUpdateOrderStatus(o.id, 'COMPLETED', 'PAID');
+                                    }
+                                  }}
+                                  className="py-1.5 px-2.5 text-[9px] font-bold uppercase text-gray-400 hover:text-gray-700 underline decoration-dotted cursor-pointer"
+                                >
+                                  Xác nhận thủ công
+                                </button>
+                              </div>
                             )}
                             {o.orderStatus !== 'COMPLETED' && o.orderStatus !== 'CANCELLED' && (
                               <button
