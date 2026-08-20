@@ -14,7 +14,6 @@ import WishlistDrawer from './components/WishlistDrawer';
 import ProductCardSkeleton from './components/ProductCardSkeleton';
 import NotFoundView from './components/NotFoundView';
 import ShipperPortal from './components/ShipperPortal';
-import OrderTrackingModal from './components/OrderTrackingModal';
 import CheckoutModal from './components/CheckoutModal';
 import ContactSection from './components/ContactSection';
 import AdminPortal from './components/AdminPortal';
@@ -210,7 +209,6 @@ export default function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [productNotFound, setProductNotFound] = useState(false);
-  const [isOrderTrackingOpen, setIsOrderTrackingOpen] = useState(false);
 
   // Load database on mount and listen to custom admin routing
   useEffect(() => {
@@ -1396,7 +1394,6 @@ const filteredProducts = products
           setAuthModalMessage('');
           setIsAuthModalOpen(true);
         }}
-        onTrackOrderClick={() => setIsOrderTrackingOpen(true)}
       />
 
       <AnimatePresence mode="wait">
@@ -1992,13 +1989,6 @@ const filteredProducts = products
         onRemove={handleToggleWishlist}
         onAddToCart={(p) => handleAddToCart(p, 1)}
         onOpenDetails={(p) => { setSelectedProduct(p); setWishlistOpen(false); }}
-      />
-
-      {/* Order Tracking Modal - tra cứu công khai, không cần đăng nhập */}
-      <OrderTrackingModal
-        isOpen={isOrderTrackingOpen}
-        onClose={() => setIsOrderTrackingOpen(false)}
-        orders={orders}
       />
 
       {/* Checkout Modal */}
