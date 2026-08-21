@@ -1000,6 +1000,13 @@ const handleUpdateOrderStatus = (
 
   const previousOrder = orders.find(o => o.id === orderId);
 
+  // Chốt bảo vệ cuối cùng: nếu đơn ĐÃ ở đúng trạng thái này rồi (và không có gì mới để cập
+  // nhật thêm) thì bỏ qua luôn, không ghi lại - tránh gửi email trùng lặp dù lệnh gọi đến
+  // từ bất kỳ nguồn nào (tự động, admin bấm tay, hay shipper) bị gọi trùng nhau.
+  if (previousOrder && previousOrder.orderStatus === status && !extraFields) {
+    return;
+  }
+
   syncOrders(prev => prev.map(o => {
     if (o.id === orderId) {
       let stockDeducted = o.stockDeducted;
@@ -1186,9 +1193,20 @@ const handleReleaseOrder = (orderId: string) => {
 // `orders` real-time qua Firestore, nên sẽ tự cập nhật ngay khi trạng thái thay đổi ở đây -
 // không cần khách bấm F5. Nút bấm thủ công trong AdminPortal vẫn hoạt động bình thường,
 // nhân viên có thể xử lý tay hoặc ghi đè bất cứ lúc nào (ví dụ giao gấp, xử lý ngoại lệ...).
+//
+// QUAN TRỌNG - sửa lỗi gửi email trùng lặp: bộ đếm này luôn đọc dữ liệu đơn hàng MỚI NHẤT
+// qua `ordersRef` (thay vì dùng trực tiếp biến `orders` từ closure của useEffect, vốn có thể
+// bị "cũ" tới 2 giây do interval không đồng bộ ngay với mỗi lần state thay đổi). Nếu không,
+// khi admin bấm "Xác nhận đơn hàng" thủ công đúng lúc bộ đếm cũng vừa tới hạn 10 giây, cả 2
+// nơi có thể cùng gọi chuyển trạng thái cho CÙNG một đơn -> gửi email xác nhận 2 lần.
+const ordersRef = React.useRef<Order[]>(orders);
+useEffect(() => {
+  ordersRef.current = orders;
+}, [orders]);
+
 useEffect(() => {
   const timer = setInterval(() => {
-    orders.forEach((order) => {
+    ordersRef.current.forEach((order) => {
       // Bỏ qua đơn đã huỷ hoặc đã hoàn thành - không có gì để tự động thêm nữa
       if (order.orderStatus === 'CANCELLED' || order.orderStatus === 'COMPLETED') return;
 
@@ -1213,8 +1231,11 @@ useEffect(() => {
   }, 2000); // kiểm tra mỗi 2 giây
 
   return () => clearInterval(timer);
+  // Không cần phụ thuộc [orders] nữa vì đã đọc qua ordersRef.current (luôn mới nhất) -
+  // giúp bộ đếm chỉ được tạo DUY NHẤT 1 LẦN, không bị hủy/tạo lại liên tục mỗi khi có
+  // đơn hàng thay đổi (hiệu quả hơn và loại bỏ hoàn toàn nguồn gốc gây trùng lặp).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [orders]);
+}, []);
 
 // ================= Xóa đơn hàng =================
 const handleDeleteOrder = (orderId: string) => {
