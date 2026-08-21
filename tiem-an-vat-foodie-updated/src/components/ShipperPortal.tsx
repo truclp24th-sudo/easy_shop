@@ -11,6 +11,7 @@ interface ShipperPortalProps {
   onCompleteDelivery: (orderId: string) => void;
   onReleaseOrder: (orderId: string) => void;
   onGoHome: () => void;
+  syncError?: string | null;
 }
 
 const SHIPPER_IDENTITY_KEY = 'esyshop_shipper_identity';
@@ -20,7 +21,8 @@ export default function ShipperPortal({
   onClaimOrder,
   onCompleteDelivery,
   onReleaseOrder,
-  onGoHome
+  onGoHome,
+  syncError
 }: ShipperPortalProps) {
   const [identity, setIdentity] = useState<{ name: string; phone: string } | null>(null);
   const [nameInput, setNameInput] = useState('');
@@ -57,7 +59,12 @@ export default function ShipperPortal({
   // Chưa có thông tin shipper -> yêu cầu nhập tên + SĐT (lưu vào máy, không cần đăng ký phức tạp)
   if (!identity) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-12">
+        {syncError && (
+          <div className="w-full max-w-sm mb-4 bg-red-600 text-white text-xs font-bold text-center py-2.5 px-4 rounded-xl">
+            ⚠️ {syncError}
+          </div>
+        )}
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="h-14 w-14 rounded-2xl bg-gray-950 text-white flex items-center justify-center mb-4">
@@ -201,6 +208,11 @@ export default function ShipperPortal({
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {syncError && (
+        <div className="bg-red-600 text-white text-xs font-bold text-center py-2 px-4">
+          ⚠️ {syncError}
+        </div>
+      )}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -246,6 +258,13 @@ export default function ShipperPortal({
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-3">
+        {/* Dòng chẩn đoán - hiển thị tổng số đơn hàng hệ thống đang nhận được, giúp phân biệt
+            "chưa có đơn nào phù hợp" với "chưa đồng bộ được dữ liệu gì cả" khi có sự cố. */}
+        <p className="text-[10px] text-gray-300 font-semibold text-center pb-1">
+          Đã đồng bộ {orders.length} đơn hàng từ hệ thống
+          {orders.length === 0 && ' — nếu con số này luôn là 0 dù đã có đơn mới, vui lòng tải lại trang (F5) hoặc kiểm tra kết nối mạng.'}
+        </p>
+
         {tab === 'available' && (
           availableOrders.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
