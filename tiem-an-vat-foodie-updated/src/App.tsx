@@ -1212,8 +1212,18 @@ useEffect(() => {
 useEffect(() => {
   const timer = setInterval(() => {
     ordersRef.current.forEach((order) => {
-      // Bỏ qua đơn đã huỷ hoặc đã hoàn thành - không có gì để tự động thêm nữa
-      if (order.orderStatus === 'CANCELLED' || order.orderStatus === 'COMPLETED') return;
+      // Bỏ qua đơn đã huỷ, đã hoàn thành, HOẶC đã sang "Đang giao" (do shipper thật đảm nhiệm) -
+      // không có gì để tự động thêm nữa. ĐÂY LÀ CHỖ SỬA LỖI QUAN TRỌNG: trước đây chỉ loại trừ
+      // CANCELLED/COMPLETED, còn DELIVERING thì KHÔNG bị loại trừ. Vì ORDER_STATUS_FLOW chỉ có
+      // 2 phần tử ['RECEIVED','PREPARING'], nên .indexOf('DELIVERING') trả về -1 (không tìm
+      // thấy) -> hệ thống hiểu lầm là đơn "chưa tới bước nào cả" và tự động ép ngược lại về
+      // PREPARING, xoá mất trạng thái "Đang giao" mà shipper vừa nhận! Đây chính là nguyên nhân
+      // khiến đơn bị "tụt" lại sau khi shipper bấm nhận đơn.
+      if (
+        order.orderStatus === 'CANCELLED' ||
+        order.orderStatus === 'COMPLETED' ||
+        order.orderStatus === 'DELIVERING'
+      ) return;
 
       const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
       const expectedStepIdx = Math.min(
@@ -1225,7 +1235,10 @@ useEffect(() => {
 
       // Chỉ tự động ĐI TỚI (không bao giờ lùi lại) - nếu nhân viên đã xử lý
       // nhanh hơn hoặc đơn đã ở bước sau, hệ thống sẽ không đụng vào.
-      if (expectedStepIdx > currentStepIdx) {
+      // Đồng thời chặn luôn trường hợp currentStepIdx = -1 (trạng thái không nằm trong
+      // ORDER_STATUS_FLOW) để tránh lặp lại chính xác lỗi vừa mô tả ở trên cho bất kỳ
+      // trạng thái nào khác có thể phát sinh sau này.
+      if (currentStepIdx !== -1 && expectedStepIdx > currentStepIdx) {
         handleUpdateOrderStatus(
           order.id,
           expectedStatus,
