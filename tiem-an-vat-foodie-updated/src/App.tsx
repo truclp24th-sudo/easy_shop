@@ -209,6 +209,9 @@ export default function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [productNotFound, setProductNotFound] = useState(false);
+  // Hiện cảnh báo RÕ RÀNG trên màn hình nếu mất kết nối/lỗi đồng bộ Firestore, thay vì chỉ
+  // âm thầm ghi log console (người dùng bình thường không mở DevTools để xem).
+  const [firestoreSyncError, setFirestoreSyncError] = useState<string | null>(null);
 
   // Load database on mount and listen to custom admin routing
   useEffect(() => {
@@ -294,9 +297,11 @@ if (productId) {
         const firestoreOrders = snapshot.docs.map((d) => d.data() as Order);
         setOrders(firestoreOrders);
         saveLocalData('orders', firestoreOrders); // giữ bản cache local phòng khi mất mạng
+        setFirestoreSyncError(null);
       },
       (error) => {
         console.error('Lỗi lắng nghe đơn hàng từ Firestore:', error);
+        setFirestoreSyncError('Không thể đồng bộ dữ liệu đơn hàng (mất kết nối hoặc lỗi máy chủ). Vui lòng kiểm tra mạng và tải lại trang.');
       }
     );
 
@@ -1382,6 +1387,7 @@ const filteredProducts = products
         onClaimOrder={handleClaimOrder}
         onCompleteDelivery={handleShipperCompleteDelivery}
         onReleaseOrder={handleReleaseOrder}
+        syncError={firestoreSyncError}
         onGoHome={() => {
           window.history.replaceState({}, '', '/');
           setCurrentView('client');
