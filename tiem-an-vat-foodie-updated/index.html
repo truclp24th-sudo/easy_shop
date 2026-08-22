@@ -1,9 +1,64 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ============ SEO CƠ BẢN ============ -->
+    <!-- QUAN TRỌNG: thay "https://your-domain.vercel.app" bên dưới bằng đúng domain thật của bạn
+         (domain Vercel mặc định, hoặc domain riêng nếu đã gắn) ở TẤT CẢ các thẻ có chứa domain này,
+         nếu không các thẻ canonical/OG/sitemap sẽ trỏ sai và Google sẽ không index đúng. -->
     <title>EsyShop - Máy In Nhiệt & Thiết Bị Văn Phòng Chính Hãng</title>
+    <meta name="description" content="EsyShop chuyên bán máy in nhiệt, giấy in nhiệt, máy scan, máy chiếu mini và sổ tay văn phòng chính hãng. Giao hàng nhanh toàn quốc, giá tốt, bảo hành uy tín." />
+    <meta name="keywords" content="máy in nhiệt, giấy in nhiệt, máy in nhiệt mini, máy scan mini, máy chiếu mini, sổ tay văn phòng, thiết bị văn phòng, EsyShop" />
+    <meta name="author" content="EsyShop" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://your-domain.vercel.app/" />
+
+    <!-- ============ Open Graph (Facebook, Zalo, Messenger...) ============ -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="EsyShop" />
+    <meta property="og:title" content="EsyShop - Máy In Nhiệt & Thiết Bị Văn Phòng Chính Hãng" />
+    <meta property="og:description" content="Máy in nhiệt, giấy in nhiệt, máy scan, máy chiếu mini và sổ tay văn phòng chính hãng. Giao hàng nhanh toàn quốc." />
+    <meta property="og:image" content="https://your-domain.vercel.app/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://your-domain.vercel.app/" />
+    <meta property="og:locale" content="vi_VN" />
+
+    <!-- ============ Twitter/X Card ============ -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EsyShop - Máy In Nhiệt & Thiết Bị Văn Phòng Chính Hãng" />
+    <meta name="twitter:description" content="Máy in nhiệt, giấy in nhiệt, máy scan, máy chiếu mini và sổ tay văn phòng chính hãng. Giao hàng nhanh toàn quốc." />
+    <meta name="twitter:image" content="https://your-domain.vercel.app/og-image.jpg" />
+
+    <!-- ============ Favicon & Theme ============ -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0a0a0a" />
+
+    <!-- ============ Dữ liệu có cấu trúc (Structured Data / JSON-LD) ============ -->
+    <!-- Giúp Google hiểu đây là một cửa hàng thật, có thể hiện thêm thông tin (sao đánh giá,
+         thanh tìm kiếm ngay trong kết quả tìm kiếm...) - nhớ thay số điện thoại/địa chỉ thật. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "OnlineStore",
+      "name": "EsyShop",
+      "description": "Cửa hàng chuyên bán máy in nhiệt, giấy in nhiệt, máy scan, máy chiếu mini và sổ tay văn phòng chính hãng.",
+      "url": "https://your-domain.vercel.app/",
+      "telephone": "+84-xxx-xxx-xxx",
+      "priceRange": "₫₫",
+      "image": "https://your-domain.vercel.app/og-image.jpg"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "EsyShop",
+      "url": "https://your-domain.vercel.app/"
+    }
+    </script>
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-S3TGNK8SM9"></script>
