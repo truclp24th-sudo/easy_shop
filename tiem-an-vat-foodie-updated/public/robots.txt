@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /shipper
+
+Sitemap: https://your-domain.vercel.app/sitemap.xml
