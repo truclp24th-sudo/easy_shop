@@ -213,6 +213,48 @@ export default function App() {
   // âm thầm ghi log console (người dùng bình thường không mở DevTools để xem).
   const [firestoreSyncError, setFirestoreSyncError] = useState<string | null>(null);
 
+  // ================= SEO: cập nhật tiêu đề/mô tả trang động theo sản phẩm đang xem =================
+  // Vì đây là single-page app (không có URL/route riêng cho từng trang), tiêu đề và mô tả mặc định
+  // trong index.html chỉ đúng cho trang chủ. Khi khách mở chi tiết 1 sản phẩm, ta cập nhật lại
+  // document.title + meta description để: (1) link chia sẻ lên Zalo/Facebook hiện đúng tên sản phẩm
+  // thay vì tên chung chung của cả shop, (2) Google (vốn có thực thi JavaScript khi thu thập dữ liệu)
+  // đọc được nội dung sát với sản phẩm hơn. Khi đóng modal, tự trả về tiêu đề/mô tả mặc định ban đầu.
+  const DEFAULT_PAGE_TITLE = 'EsyShop - Máy In Nhiệt & Thiết Bị Văn Phòng Chính Hãng';
+  const DEFAULT_PAGE_DESCRIPTION = 'EsyShop chuyên bán máy in nhiệt, giấy in nhiệt, máy scan, máy chiếu mini và sổ tay văn phòng chính hãng. Giao hàng nhanh toàn quốc, giá tốt, bảo hành uy tín.';
+
+  useEffect(() => {
+    const metaDescriptionTag = document.querySelector('meta[name="description"]');
+    const ogTitleTag = document.querySelector('meta[property="og:title"]');
+    const ogDescriptionTag = document.querySelector('meta[property="og:description"]');
+
+    if (selectedProduct) {
+      const productTitle = `${selectedProduct.name} | EsyShop`;
+      const productDescription = (selectedProduct.description || DEFAULT_PAGE_DESCRIPTION).slice(0, 160);
+
+      document.title = productTitle;
+      metaDescriptionTag?.setAttribute('content', productDescription);
+      ogTitleTag?.setAttribute('content', productTitle);
+      ogDescriptionTag?.setAttribute('content', productDescription);
+
+      // Cập nhật URL để đường link có thể chia sẻ trực tiếp tới đúng sản phẩm này (không tải lại trang).
+      const url = new URL(window.location.href);
+      url.searchParams.set('product', selectedProduct.id);
+      window.history.replaceState({}, '', url.toString());
+    } else {
+      document.title = DEFAULT_PAGE_TITLE;
+      metaDescriptionTag?.setAttribute('content', DEFAULT_PAGE_DESCRIPTION);
+      ogTitleTag?.setAttribute('content', DEFAULT_PAGE_TITLE);
+      ogDescriptionTag?.setAttribute('content', DEFAULT_PAGE_DESCRIPTION);
+
+      // Chỉ xóa param "product" khỏi URL, giữ nguyên các param khác nếu có.
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('product')) {
+        url.searchParams.delete('product');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, [selectedProduct]);
+
   // Load database on mount and listen to custom admin routing
   useEffect(() => {
     const hasRebranded = localStorage.getItem('perfume_rebrand_v1');
