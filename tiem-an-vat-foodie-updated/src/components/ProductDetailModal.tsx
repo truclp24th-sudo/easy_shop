@@ -236,7 +236,7 @@ export default function ProductDetailModal({
                           : 'border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <img src={img} alt="" className="max-w-full max-h-full object-contain rounded-lg" referrerPolicy="no-referrer" />
+                      <img src={img} alt={`${product.name} - ảnh ${idx + 1}`} className="max-w-full max-h-full object-contain rounded-lg" referrerPolicy="no-referrer" />
                     </button>
                   ))}
                 </div>
