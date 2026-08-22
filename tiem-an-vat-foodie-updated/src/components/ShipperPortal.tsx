@@ -258,27 +258,6 @@ export default function ShipperPortal({
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-3">
-        {/* Dòng chẩn đoán - hiển thị tổng số đơn hàng hệ thống đang nhận được, giúp phân biệt
-            "chưa có đơn nào phù hợp" với "chưa đồng bộ được dữ liệu gì cả" khi có sự cố. */}
-        <p className="text-[10px] text-gray-300 font-semibold text-center pb-1">
-          Đã đồng bộ {orders.length} đơn hàng từ hệ thống
-          {orders.length === 0 && ' — nếu con số này luôn là 0 dù đã có đơn mới, vui lòng tải lại trang (F5) hoặc kiểm tra kết nối mạng.'}
-        </p>
-
-        {/* Bảng chẩn đoán chi tiết - hiện đúng dữ liệu thô từng đơn để xác định chính xác
-            vì sao 1 đơn không xuất hiện đúng tab (VD: trạng thái sai định dạng, còn dính
-            tên shipper cũ...). Tạm thời hiển thị để debug, sẽ gỡ bỏ sau khi xác định xong lỗi. */}
-        {orders.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] font-mono text-amber-900 space-y-1 overflow-x-auto">
-            <p className="font-black uppercase mb-1">🔍 Dữ liệu chẩn đoán (tạm thời):</p>
-            {orders.map(o => (
-              <div key={o.id} className="whitespace-nowrap">
-                #{o.id} | status="{o.orderStatus}" | shipperName={JSON.stringify(o.shipperName)} | shipperPhone={JSON.stringify(o.shipperPhone)}
-              </div>
-            ))}
-          </div>
-        )}
-
         {tab === 'available' && (
           availableOrders.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
