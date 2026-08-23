@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /shipper
 
-Sitemap: https://your-domain.vercel.app/sitemap.xml
+Sitemap: https://tteasyshop.vercel.app/sitemap.xml
