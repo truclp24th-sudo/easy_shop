@@ -20,6 +20,7 @@ interface CheckoutModalProps {
   paymentMethod: 'COD' | 'ONLINE';
   paymentStatus: 'PENDING' | 'PAID';
   isMemberRegistrationRequested?: boolean;
+  pointsUsed?: number;
 }) => void;
   currentUser: AppUser | null;
   users: AppUser[];
@@ -91,9 +92,22 @@ export default function CheckoutModal({
   };
 
   const willBeVipMember = !!(currentUser?.isMember || (!currentUser && isMemberRegistrationRequested));
-  // Ưu đãi thành viên VIP: giảm 2% trên mỗi món hàng (tương đương 2% trên tổng tiền sản phẩm).
-  const vipDiscountAmount = willBeVipMember ? Math.round(subtotal * 0.02) : 0;
-  const totalToPay = Math.max(0, subtotal - vipDiscountAmount + shippingFee - discountAmount);
+  // Ưu đãi thành viên VIP: giảm CỐ ĐỊNH 5.000đ trên MỖI sản phẩm (tính theo tổng số lượng món
+  // hàng trong giỏ, không phải theo % giá trị đơn hàng như trước).
+  const totalItemQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const vipDiscountAmount = willBeVipMember ? Math.min(subtotal, totalItemQuantity * 5000) : 0;
+
+  // ================= Dùng điểm tích lũy để giảm giá =================
+  // 1 điểm = 10đ (khớp với công thức tích điểm: 1.000đ chi tiêu = 1 điểm).
+  // Giới hạn không cho giảm vượt quá phần còn lại phải trả (sau khi đã trừ ưu đãi VIP),
+  // tránh trường hợp đơn hàng bị âm tiền.
+  const [usePoints, setUsePoints] = useState(false);
+  const availablePointsValue = (currentUser?.memberPoints || 0) * 10;
+  const remainingAfterVip = Math.max(0, subtotal - vipDiscountAmount);
+  const pointsDiscountAmount = usePoints ? Math.min(availablePointsValue, remainingAfterVip) : 0;
+  const pointsUsedInThisOrder = Math.floor(pointsDiscountAmount / 10);
+
+  const totalToPay = Math.max(0, subtotal - vipDiscountAmount - pointsDiscountAmount + shippingFee - discountAmount);
 
   const handleSimulatePayment = () => {
     setIsPaying(true);
@@ -123,7 +137,8 @@ onPlaceOrder({
   customerNotes,
   paymentMethod,
   paymentStatus,
-  isMemberRegistrationRequested: !currentUser && isMemberRegistrationRequested // only register if not already logged in
+  isMemberRegistrationRequested: !currentUser && isMemberRegistrationRequested, // only register if not already logged in
+  pointsUsed: pointsUsedInThisOrder
 });
 
     setOrderComplete(true);
@@ -359,6 +374,27 @@ onPlaceOrder({
                     )}
                   </div>
 
+                  {/* Dùng điểm tích lũy để giảm giá - chỉ hiện khi khách đã đăng nhập và có điểm > 0 */}
+                  {currentUser && currentUser.memberPoints > 0 && (
+                    <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-150 rounded-2xl p-3.5">
+                      <input
+                        type="checkbox"
+                        id="usePoints"
+                        checked={usePoints}
+                        onChange={(e) => setUsePoints(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded-sm border-gray-300 text-blue-700 focus:ring-blue-700 cursor-pointer"
+                      />
+                      <label htmlFor="usePoints" className="text-xs font-semibold text-gray-700 leading-relaxed cursor-pointer select-none flex-1">
+                        <span className="text-blue-800 font-black block">
+                          Dùng điểm tích lũy để giảm giá ({currentUser.memberPoints} điểm ≈ {formatPrice(availablePointsValue)})
+                        </span>
+                        {usePoints
+                          ? `Đang dùng ${formatPrice(pointsDiscountAmount)} (${pointsUsedInThisOrder} điểm) cho đơn này.`
+                          : 'Tích chọn để trừ trực tiếp vào tổng tiền đơn hàng.'}
+                      </label>
+                    </div>
+                  )}
+
                   {/* Payment Methods */}
                   <div className="space-y-3 pt-2">
                     <span className="text-xs font-bold uppercase tracking-widest text-gray-500 block">Phương Thức Thanh Toán</span>
@@ -481,8 +517,14 @@ onPlaceOrder({
                     </div>
                     {vipDiscountAmount > 0 && (
                       <div className="flex justify-between text-amber-600 font-bold">
-                        <span>⭐ Ưu đãi thành viên VIP (-2%):</span>
+                        <span>⭐ Ưu đãi thành viên VIP (-{formatPrice(5000)}/sản phẩm):</span>
                         <span>-{formatPrice(vipDiscountAmount)}</span>
+                      </div>
+                    )}
+                    {pointsDiscountAmount > 0 && (
+                      <div className="flex justify-between text-blue-700 font-bold">
+                        <span>Dùng điểm tích lũy ({pointsUsedInThisOrder} điểm):</span>
+                        <span>-{formatPrice(pointsDiscountAmount)}</span>
                       </div>
                     )}
                     {discountAmount > 0 && (

@@ -51,6 +51,8 @@ export default function UserAuthModal({
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regCaptchaInput, setRegCaptchaInput] = useState('');
+  // Mặc định KHÔNG tự bật VIP - khách phải tự tick chọn nếu muốn tham gia (không ép buộc).
+  const [regJoinVip, setRegJoinVip] = useState(false);
   const [captchaNums, setCaptchaNums] = useState(() => ({
     a: Math.floor(Math.random() * 8) + 1,
     b: Math.floor(Math.random() * 8) + 1
@@ -153,7 +155,7 @@ export default function UserAuthModal({
       return;
     }
 
-    onRegister(regName.trim(), regEmail.trim(), regPhone.trim(), regPassword, true);
+    onRegister(regName.trim(), regEmail.trim(), regPhone.trim(), regPassword, regJoinVip);
     setRegSuccess(true);
     setTimeout(() => {
       setRegSuccess(false);
@@ -774,6 +776,22 @@ export default function UserAuthModal({
                           />
                         </div>
                       </div>
+
+                      <label className="flex items-start gap-3 p-4 rounded-xl border border-amber-150 bg-amber-50/60 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={regJoinVip}
+                          onChange={(e) => setRegJoinVip(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 accent-amber-600 cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-700">
+                          <span className="font-extrabold text-amber-700">⭐ Tham gia Esy Club VIP ngay (miễn phí)</span>
+                          <br />
+                          <span className="text-[11px] text-gray-500">
+                            Nhận 100 điểm chào mừng, giảm 5.000đ mỗi sản phẩm khi mua hàng, và tích điểm đổi tiền. Bạn có thể bỏ qua và đăng ký sau bất cứ lúc nào.
+                          </span>
+                        </span>
+                      </label>
 
                       <button
                         type="submit"
