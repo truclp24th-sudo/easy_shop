@@ -6,7 +6,7 @@ import {
   Bot, Send, Bell, AlertCircle, Tag, Percent, Package
 } from 'lucide-react';
 import { CATEGORY_ICON_OPTIONS, getCategoryIcon } from '../categoryIcons';
-import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category } from '../types';
+import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category, AppUser } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminPortalProps {
@@ -34,6 +34,7 @@ interface AdminPortalProps {
   onAddCategory: (name: string, icon: string) => void;
   onUpdateCategory: (category: Category) => void;
   onDeleteCategory: (categoryId: string) => void;
+  users: AppUser[];
 }
 
 export default function AdminPortal({
@@ -60,9 +61,10 @@ export default function AdminPortal({
   categories,
   onAddCategory,
   onUpdateCategory,
-  onDeleteCategory
+  onDeleteCategory,
+  users
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'telegram'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'customers' | 'telegram'>('stats');
   const [reviewSubTab, setReviewSubTab] = useState<'product_reviews' | 'customer_feedback'>('product_reviews');
 
   // ================= Quản lý mã giảm giá (Coupon) =================
@@ -315,6 +317,16 @@ export default function AdminPortal({
   );
 
   const [orderSearch, setOrderSearch] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const filteredCustomers = users.filter(u => {
+    const keyword = customerSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return (
+      u.name.toLowerCase().includes(keyword) ||
+      u.phone.includes(keyword) ||
+      (u.email || '').toLowerCase().includes(keyword)
+    );
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const filteredOrders = orders.filter(o => 
     o.id.toLowerCase().includes(orderSearch.toLowerCase()) || 
     o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) || 
@@ -447,7 +459,7 @@ export default function AdminPortal({
         </div>
 
         {/* Action button to trigger Add Product / Logout */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => window.open('/shipper', '_blank')}
             className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase transition-colors cursor-pointer"
@@ -482,7 +494,7 @@ export default function AdminPortal({
 
       {/* Admin Tabs */}
       <div className="flex border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar gap-1.5">
-        {(['stats', 'products', 'categories', 'orders', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
+        {(['stats', 'products', 'categories', 'orders', 'customers', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
           const hasPendingFeedback = tab === 'reviews' && (
             reviews.some(r => r.status === 'PENDING') || 
             contactMessages.some(m => m.status === 'PENDING')
@@ -506,6 +518,7 @@ export default function AdminPortal({
               {tab === 'products' && `Danh sách sản phẩm (${products.length})`}
               {tab === 'categories' && `Danh mục (${categories.length})`}
               {tab === 'orders' && `Đơn đặt hàng (${orders.length})`}
+              {tab === 'customers' && `Khách hàng (${users.length})`}
               {tab === 'reviews' && `Quản lý đánh giá & Phản hồi (${reviews.length + contactMessages.length})`}
               {tab === 'coupons' && `Mã giảm giá (${coupons.length})`}
               {tab === 'telegram' && 'Liên kết Telegram'}
@@ -1994,6 +2007,77 @@ export default function AdminPortal({
                   );
                 })
               )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Tab: Quản lý Khách hàng */}
+        {activeTab === 'customers' && (
+          <motion.div
+            key="customers"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            <div className="max-w-md shadow-xs rounded-xl bg-white border border-gray-100 p-1.5 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Tìm theo tên, SĐT, email..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="flex-1 px-3 py-2 text-xs font-semibold focus:outline-hidden bg-transparent"
+              />
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[860px]">
+                <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 font-black tracking-wider">
+                  <tr>
+                    <th className="p-4">Khách hàng</th>
+                    <th className="p-4">Liên hệ</th>
+                    <th className="p-4">Địa chỉ</th>
+                    <th className="p-4">Loại tài khoản</th>
+                    <th className="p-4">Điểm tích lũy</th>
+                    <th className="p-4">Ngày tham gia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredCustomers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400 italic font-medium">
+                        {users.length === 0 ? 'Chưa có khách hàng nào đăng ký.' : 'Không tìm thấy khách hàng khớp với từ khóa tìm kiếm.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCustomers.map((u) => (
+                      <tr key={u.phone} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="p-4 font-extrabold text-gray-900">{u.name}</td>
+                        <td className="p-4">
+                          <p className="font-mono text-gray-700">{u.phone}</p>
+                          {u.email && <p className="text-gray-400 text-[11px]">{u.email}</p>}
+                        </td>
+                        <td className="p-4 text-gray-500 max-w-[220px] truncate">{u.address || '—'}</td>
+                        <td className="p-4">
+                          {u.isMember ? (
+                            <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-150 px-2 py-1 rounded-full">
+                              ⭐ Thành viên VIP
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                              Khách thường
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 font-mono font-bold text-gray-800">{u.memberPoints}</td>
+                        <td className="p-4 text-gray-400">
+                          {new Date(u.createdAt).toLocaleDateString('vi-VN')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </motion.div>
         )}
