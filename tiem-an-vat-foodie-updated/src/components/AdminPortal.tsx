@@ -319,6 +319,8 @@ export default function AdminPortal({
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [visiblePasswordPhone, setVisiblePasswordPhone] = useState<string | null>(null);
+  const [customerPage, setCustomerPage] = useState(1);
+  const CUSTOMERS_PER_PAGE = 5;
   const filteredCustomers = users.filter(u => {
     const keyword = customerSearch.trim().toLowerCase();
     if (!keyword) return true;
@@ -328,6 +330,14 @@ export default function AdminPortal({
       (u.email || '').toLowerCase().includes(keyword)
     );
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const totalCustomerPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMERS_PER_PAGE));
+  // Nếu đang ở trang cao hơn số trang thực tế (VD: vừa lọc/tìm kiếm làm danh sách ngắn lại),
+  // tự động kéo về trang cuối cùng hợp lệ để tránh hiện trang trống.
+  const safeCustomerPage = Math.min(customerPage, totalCustomerPages);
+  const paginatedCustomers = filteredCustomers.slice(
+    (safeCustomerPage - 1) * CUSTOMERS_PER_PAGE,
+    safeCustomerPage * CUSTOMERS_PER_PAGE
+  );
   const filteredOrders = orders.filter(o => 
     o.id.toLowerCase().includes(orderSearch.toLowerCase()) || 
     o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) || 
@@ -2026,15 +2036,16 @@ export default function AdminPortal({
                 type="text"
                 placeholder="Tìm theo tên, SĐT, email..."
                 value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
+                onChange={(e) => { setCustomerSearch(e.target.value); setCustomerPage(1); }}
                 className="flex-1 px-3 py-2 text-xs font-semibold focus:outline-hidden bg-transparent"
               />
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
-              <table className="w-full text-left text-xs min-w-[980px]">
+              <table className="w-full text-left text-xs min-w-[1020px]">
                 <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 font-black tracking-wider">
                   <tr>
+                    <th className="p-4 w-12">STT</th>
                     <th className="p-4">Khách hàng</th>
                     <th className="p-4">Liên hệ</th>
                     <th className="p-4">Mật khẩu</th>
@@ -2045,15 +2056,16 @@ export default function AdminPortal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredCustomers.length === 0 ? (
+                  {paginatedCustomers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-400 italic font-medium">
+                      <td colSpan={8} className="p-8 text-center text-gray-400 italic font-medium">
                         {users.length === 0 ? 'Chưa có khách hàng nào đăng ký.' : 'Không tìm thấy khách hàng khớp với từ khóa tìm kiếm.'}
                       </td>
                     </tr>
                   ) : (
-                    filteredCustomers.map((u) => (
+                    paginatedCustomers.map((u, idx) => (
                       <tr key={u.phone} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="p-4 text-gray-400 font-mono">{(safeCustomerPage - 1) * CUSTOMERS_PER_PAGE + idx + 1}</td>
                         <td className="p-4 font-extrabold text-gray-900">{u.name}</td>
                         <td className="p-4">
                           <p className="font-mono text-gray-700">{u.phone}</p>
@@ -2092,6 +2104,49 @@ export default function AdminPortal({
                 </tbody>
               </table>
             </div>
+
+            {/* Thanh phân trang - 5 khách hàng / trang */}
+            {filteredCustomers.length > 0 && (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <p className="text-[11px] font-semibold text-gray-400">
+                  Hiện {(safeCustomerPage - 1) * CUSTOMERS_PER_PAGE + 1}
+                  –{Math.min(safeCustomerPage * CUSTOMERS_PER_PAGE, filteredCustomers.length)}
+                  {' '}trên tổng số {filteredCustomers.length} khách hàng
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCustomerPage(p => Math.max(1, p - 1))}
+                    disabled={safeCustomerPage === 1}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    ← Trước
+                  </button>
+                  {Array.from({ length: totalCustomerPages }).map((_, i) => {
+                    const pageNum = i + 1;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCustomerPage(pageNum)}
+                        className={`h-8 w-8 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          pageNum === safeCustomerPage
+                            ? 'bg-gray-950 text-white'
+                            : 'text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setCustomerPage(p => Math.min(totalCustomerPages, p + 1))}
+                    disabled={safeCustomerPage === totalCustomerPages}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Sau →
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 

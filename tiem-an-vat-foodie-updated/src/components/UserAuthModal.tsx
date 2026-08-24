@@ -270,6 +270,9 @@ export default function UserAuthModal({
                           <div className="text-right">
                             <span className="text-[9px] text-gray-500 block uppercase">Điểm tích lũy</span>
                             <p className="text-xs font-black text-yellow-400 font-mono">{currentUser.memberPoints} điểm</p>
+                            <p className="text-[10px] font-bold text-gray-400 font-mono">
+                              ≈ {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(currentUser.memberPoints * 10)}
+                            </p>
                           </div>
                         </div>
                       </div>

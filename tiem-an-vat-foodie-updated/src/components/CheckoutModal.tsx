@@ -90,7 +90,10 @@ export default function CheckoutModal({
     }
   };
 
-  const totalToPay = Math.max(0, subtotal + shippingFee - discountAmount);
+  const willBeVipMember = !!(currentUser?.isMember || (!currentUser && isMemberRegistrationRequested));
+  // Ưu đãi thành viên VIP: giảm 2% trên mỗi món hàng (tương đương 2% trên tổng tiền sản phẩm).
+  const vipDiscountAmount = willBeVipMember ? Math.round(subtotal * 0.02) : 0;
+  const totalToPay = Math.max(0, subtotal - vipDiscountAmount + shippingFee - discountAmount);
 
   const handleSimulatePayment = () => {
     setIsPaying(true);
@@ -476,6 +479,12 @@ onPlaceOrder({
                         {shippingFee === 0 ? <span className="text-emerald-600 font-bold">FREE</span> : formatPrice(shippingFee)}
                       </span>
                     </div>
+                    {vipDiscountAmount > 0 && (
+                      <div className="flex justify-between text-amber-600 font-bold">
+                        <span>⭐ Ưu đãi thành viên VIP (-2%):</span>
+                        <span>-{formatPrice(vipDiscountAmount)}</span>
+                      </div>
+                    )}
                     {discountAmount > 0 && (
                       <div className="flex justify-between text-emerald-600 font-bold">
                         <span>Giảm giá mã quà tặng ({discountCode}):</span>
