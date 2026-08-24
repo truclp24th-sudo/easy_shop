@@ -59,7 +59,7 @@ export default function App() {
     return localStorage.getItem('isAdminAuthenticated') === 'true';
   });
 
-  // User Accounts & Membership states
+  // ================= Đồng bộ tài khoản khách hàng real-time qua Firestore =================
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('aura_current_user') || sessionStorage.getItem('aura_current_user');
     return saved ? JSON.parse(saved) : null;
@@ -69,6 +69,68 @@ export default function App() {
     const saved = localStorage.getItem('aura_users_list');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Cờ đánh dấu đã chạy xong bước "di dời dữ liệu cũ" (users từng chỉ lưu trên máy khách,
+  // nay chuyển hẳn sang lưu tập trung trên Firestore) - chỉ chạy 1 lần lúc tải trang.
+  const hasMigratedLocalUsers = React.useRef(false);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const firestoreUsers = snapshot.docs.map((d) => d.data() as AppUser);
+
+        // Di dời 1 lần: nếu máy này có tài khoản cũ lưu trong localStorage mà CHƯA có trên
+        // Firestore (VD: khách đăng ký trước khi có tính năng lưu tập trung), tự động đẩy
+        // các tài khoản đó lên Firestore để không bị mất, rồi không cần lặp lại lần sau.
+        if (!hasMigratedLocalUsers.current) {
+          hasMigratedLocalUsers.current = true;
+          const localSaved = localStorage.getItem('aura_users_list');
+          const localUsers: AppUser[] = localSaved ? JSON.parse(localSaved) : [];
+          const firestorePhones = new Set(firestoreUsers.map(u => u.phone));
+          const missingUsers = localUsers.filter(u => u.phone && !firestorePhones.has(u.phone));
+          if (missingUsers.length > 0) {
+            missingUsers.forEach((u) => {
+              setDoc(doc(db, 'users', u.phone), u, { merge: true }).catch((err) => {
+                console.error('Lỗi di dời tài khoản khách hàng lên Firestore:', err);
+              });
+            });
+            // Không cần setUsers ở đây - onSnapshot sẽ tự bắn lại sự kiện với dữ liệu đầy đủ
+            // ngay sau khi các setDoc phía trên hoàn tất.
+            return;
+          }
+        }
+
+        setUsers(firestoreUsers);
+        localStorage.setItem('aura_users_list', JSON.stringify(firestoreUsers));
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe tài khoản khách hàng từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const syncUsers = (updater: AppUser[] | ((prev: AppUser[]) => AppUser[])) => {
+    setUsers(prev => {
+      const newUsers = typeof updater === 'function'
+        ? (updater as (u: AppUser[]) => AppUser[])(prev)
+        : updater;
+
+      localStorage.setItem('aura_users_list', JSON.stringify(newUsers));
+      newUsers.forEach((user) => {
+        // Dùng số điện thoại làm ID tài liệu (đã là khóa duy nhất sẵn có trong toàn bộ logic
+        // đăng ký/đăng nhập hiện tại, không cần đổi cấu trúc dữ liệu gì thêm).
+        if (!user.phone) return;
+        setDoc(doc(db, 'users', user.phone), user, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ tài khoản khách hàng lên Firestore:', err);
+        });
+      });
+
+      return newUsers;
+    });
+  };
 
   const handleUserLogin = (email: string, password: string, remember: boolean = true): boolean => {
     const found = users.find(
@@ -102,9 +164,7 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
 
-    const updatedUsers = [...users.filter(u => u.phone !== phone), newUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('aura_users_list', JSON.stringify(updatedUsers));
+    syncUsers(prev => [...prev.filter(u => u.phone !== phone), newUser]);
 
     setCurrentUser(newUser);
     localStorage.setItem('aura_current_user', JSON.stringify(newUser));
@@ -142,9 +202,7 @@ export default function App() {
       sessionStorage.setItem('aura_current_user', JSON.stringify(updatedUser));
     }
 
-    const updatedUsers = [...users.filter(u => u.phone !== updatedUser.phone), updatedUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('aura_users_list', JSON.stringify(updatedUsers));
+    syncUsers(prev => [...prev.filter(u => u.phone !== updatedUser.phone), updatedUser]);
   };
 
   // Custom route navigator helper
@@ -920,9 +978,7 @@ syncOrders(prev => [newOrder, ...prev]);
       setCurrentUser(targetUser);
       localStorage.setItem('aura_current_user', JSON.stringify(targetUser));
 
-      const updatedUsers = [...users.filter(u => u.phone !== targetUser.phone), targetUser];
-      setUsers(updatedUsers);
-      localStorage.setItem('aura_users_list', JSON.stringify(updatedUsers));
+      syncUsers(prev => [...prev.filter(u => u.phone !== targetUser.phone), targetUser]);
     }
 
     // Clear cart
@@ -1898,6 +1954,7 @@ const filteredProducts = products
                 onAddCategory={handleAddCategory}
                 onUpdateCategory={handleUpdateCategory}
                 onDeleteCategory={handleDeleteCategory}
+                users={users}
               />
             ) : (
               <AdminLogin
