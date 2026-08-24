@@ -813,6 +813,7 @@ if (productId) {
   paymentMethod: 'COD' | 'ONLINE';
   paymentStatus: 'PENDING' | 'PAID';
   isMemberRegistrationRequested?: boolean;
+  pointsUsed?: number;
 }) => {
     // ================= Kiểm tra tồn kho trước khi cho đặt hàng =================
     // Lấy dữ liệu tồn kho MỚI NHẤT từ state `products` (không dùng bản cache trong giỏ hàng),
@@ -838,13 +839,25 @@ if (productId) {
     const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
     const shippingFee = orderSubtotal > 150000 ? 0 : 15000;
 
-    // ================= Ưu đãi thành viên VIP: giảm 2% mỗi món =================
+    // ================= Ưu đãi thành viên VIP: giảm CỐ ĐỊNH 5.000đ mỗi sản phẩm =================
     // Áp dụng khi khách ĐÃ là thành viên VIP, hoặc đang đăng ký làm thành viên VIP ngay
     // trong đơn này (isMemberRegistrationRequested). Phải khớp CHÍNH XÁC với logic hiển thị
     // ở CheckoutModal.tsx (willBeVipMember) để số tiền hiển thị lúc thanh toán và số tiền
     // thực tế lưu vào đơn hàng luôn trùng khớp nhau.
     const willBeVipMember = !!(currentUser?.isMember || (!currentUser && customerData.isMemberRegistrationRequested));
-    const vipDiscountAmount = willBeVipMember ? Math.round(orderSubtotal * 0.02) : 0;
+    const totalItemQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const vipDiscountAmount = willBeVipMember ? Math.min(orderSubtotal, totalItemQuantity * 5000) : 0;
+
+    // ================= Dùng điểm tích lũy để giảm giá =================
+    // Kiểm tra lại NGAY LÚC ĐẶT HÀNG (không tin tưởng hoàn toàn số điểm đã tính ở CheckoutModal,
+    // đề phòng dữ liệu điểm đã thay đổi trong lúc khách điền thông tin) - giới hạn không vượt quá
+    // số điểm khách ĐANG THỰC SỰ CÓ, và không vượt quá phần còn lại phải trả sau ưu đãi VIP.
+    const requestedPointsUsed = Math.max(0, customerData.pointsUsed || 0);
+    const availablePoints = currentUser?.memberPoints || 0;
+    const remainingAfterVip = Math.max(0, orderSubtotal - vipDiscountAmount);
+    const maxUsablePoints = Math.min(availablePoints, Math.floor(remainingAfterVip / 10));
+    const actualPointsUsed = Math.min(requestedPointsUsed, maxUsablePoints);
+    const pointsDiscountAmount = actualPointsUsed * 10;
 
     // ================= Kiểm tra lại mã giảm giá (nếu có) ngay trước khi đặt hàng =================
     // Đề phòng mã đã bị admin tắt/xóa/hết lượt trong lúc khách đang điền thông tin thanh toán.
@@ -872,7 +885,7 @@ if (productId) {
       }
     }
 
-    const orderTotal = Math.max(0, orderSubtotal - vipDiscountAmount + shippingFee - finalDiscountAmount);
+    const orderTotal = Math.max(0, orderSubtotal - vipDiscountAmount - pointsDiscountAmount + shippingFee - finalDiscountAmount);
 
     const newOrder: Order = {
   id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -897,7 +910,8 @@ if (productId) {
   stockDeducted: true,
   couponCode: finalCouponCode || undefined,
   discountAmount: finalDiscountAmount || undefined,
-  vipDiscountAmount: vipDiscountAmount || undefined
+  vipDiscountAmount: vipDiscountAmount || undefined,
+  pointsUsed: actualPointsUsed || undefined
 };
 
 // Gửi đơn hàng sang NodeJS để gửi email
@@ -962,7 +976,7 @@ syncOrders(prev => [newOrder, ...prev]);
           address: customerData.customerAddress,
           isMember: true,
           memberCardNo: existing.memberCardNo || `AURA-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-          memberPoints: existing.memberPoints + pointsEarned
+          memberPoints: Math.max(0, existing.memberPoints + pointsEarned - actualPointsUsed)
         };
       } else {
         targetUser = {
@@ -972,7 +986,7 @@ syncOrders(prev => [newOrder, ...prev]);
           address: customerData.customerAddress,
           isMember: true,
           memberCardNo: `AURA-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-          memberPoints: 100 + pointsEarned, // 100 welcome points + order points
+          memberPoints: Math.max(0, 100 + pointsEarned - actualPointsUsed), // 100 welcome points + order points - điểm đã dùng
           createdAt: new Date().toISOString()
         };
       }
@@ -983,7 +997,7 @@ syncOrders(prev => [newOrder, ...prev]);
         // mới nhất và chính xác nhất, trước đây bị bỏ sót không lưu lại gây ra tình trạng cột
         // "Địa chỉ" trong trang Khách hàng luôn trống dù khách đã đặt hàng nhiều lần.
         address: customerData.customerAddress,
-        memberPoints: currentUser.memberPoints + pointsEarned
+        memberPoints: Math.max(0, currentUser.memberPoints + pointsEarned - actualPointsUsed)
       };
     }
 
