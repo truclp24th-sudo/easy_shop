@@ -53,6 +53,8 @@ export interface Order {
   // Mã giảm giá đã áp dụng cho đơn này (nếu có).
   couponCode?: string;
   discountAmount?: number;
+  // Số tiền được giảm nhờ ưu đãi thành viên VIP (2%/món), tách riêng khỏi mã giảm giá để dễ tra cứu.
+  vipDiscountAmount?: number;
   // Shipper đang phụ trách giao đơn này (tự nhận đơn qua Cổng Shipper).
   shipperName?: string;
   shipperPhone?: string;

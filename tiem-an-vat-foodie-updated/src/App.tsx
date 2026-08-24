@@ -838,6 +838,14 @@ if (productId) {
     const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
     const shippingFee = orderSubtotal > 150000 ? 0 : 15000;
 
+    // ================= Ưu đãi thành viên VIP: giảm 2% mỗi món =================
+    // Áp dụng khi khách ĐÃ là thành viên VIP, hoặc đang đăng ký làm thành viên VIP ngay
+    // trong đơn này (isMemberRegistrationRequested). Phải khớp CHÍNH XÁC với logic hiển thị
+    // ở CheckoutModal.tsx (willBeVipMember) để số tiền hiển thị lúc thanh toán và số tiền
+    // thực tế lưu vào đơn hàng luôn trùng khớp nhau.
+    const willBeVipMember = !!(currentUser?.isMember || (!currentUser && customerData.isMemberRegistrationRequested));
+    const vipDiscountAmount = willBeVipMember ? Math.round(orderSubtotal * 0.02) : 0;
+
     // ================= Kiểm tra lại mã giảm giá (nếu có) ngay trước khi đặt hàng =================
     // Đề phòng mã đã bị admin tắt/xóa/hết lượt trong lúc khách đang điền thông tin thanh toán.
     let finalDiscountAmount = 0;
@@ -864,7 +872,7 @@ if (productId) {
       }
     }
 
-    const orderTotal = Math.max(0, orderSubtotal + shippingFee - finalDiscountAmount);
+    const orderTotal = Math.max(0, orderSubtotal - vipDiscountAmount + shippingFee - finalDiscountAmount);
 
     const newOrder: Order = {
   id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -888,7 +896,8 @@ if (productId) {
   estimatedDeliveryAt: new Date(Date.now() + ESTIMATED_DELIVERY_MS).toISOString(),
   stockDeducted: true,
   couponCode: finalCouponCode || undefined,
-  discountAmount: finalDiscountAmount || undefined
+  discountAmount: finalDiscountAmount || undefined,
+  vipDiscountAmount: vipDiscountAmount || undefined
 };
 
 // Gửi đơn hàng sang NodeJS để gửi email
@@ -939,8 +948,8 @@ syncOrders(prev => [newOrder, ...prev]);
     setAppliedCouponCode('');
     setAppliedDiscountAmount(0);
 
-    // Points earned: 1 point per 10,000 VND
-    const pointsEarned = Math.floor(orderTotal / 10000);
+    // Points earned: 1 điểm cho mỗi 1.000đ chi tiêu (100 điểm = quy đổi 1.000đ, tức 1 điểm = 10đ)
+    const pointsEarned = Math.floor(orderTotal / 1000);
 
     let targetUser = currentUser;
     if (customerData.isMemberRegistrationRequested && customerData.customerPhone) {
@@ -970,6 +979,10 @@ syncOrders(prev => [newOrder, ...prev]);
     } else if (currentUser && currentUser.phone === customerData.customerPhone) {
       targetUser = {
         ...currentUser,
+        // Luôn cập nhật địa chỉ theo đúng địa chỉ khách vừa nhập lúc thanh toán - đây là địa chỉ
+        // mới nhất và chính xác nhất, trước đây bị bỏ sót không lưu lại gây ra tình trạng cột
+        // "Địa chỉ" trong trang Khách hàng luôn trống dù khách đã đặt hàng nhiều lần.
+        address: customerData.customerAddress,
         memberPoints: currentUser.memberPoints + pointsEarned
       };
     }
