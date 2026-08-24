@@ -3,7 +3,7 @@ import {
   TrendingUp, ShoppingBag, MessageSquare, ShieldAlert, Plus, 
   Trash2, Edit, Save, Power, Check, RefreshCw, X, Award, MapPin, 
   CornerDownRight, CheckCircle, Clock, Truck, ShieldCheck, Flame, Info, Star,
-  Bot, Send, Bell, AlertCircle, Tag, Percent, Package
+  Bot, Send, Bell, AlertCircle, Tag, Percent, Package, Eye, EyeOff
 } from 'lucide-react';
 import { CATEGORY_ICON_OPTIONS, getCategoryIcon } from '../categoryIcons';
 import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category, AppUser } from '../types';
@@ -318,6 +318,7 @@ export default function AdminPortal({
 
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const [visiblePasswordPhone, setVisiblePasswordPhone] = useState<string | null>(null);
   const filteredCustomers = users.filter(u => {
     const keyword = customerSearch.trim().toLowerCase();
     if (!keyword) return true;
@@ -2031,11 +2032,12 @@ export default function AdminPortal({
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
-              <table className="w-full text-left text-xs min-w-[860px]">
+              <table className="w-full text-left text-xs min-w-[980px]">
                 <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 font-black tracking-wider">
                   <tr>
                     <th className="p-4">Khách hàng</th>
                     <th className="p-4">Liên hệ</th>
+                    <th className="p-4">Mật khẩu</th>
                     <th className="p-4">Địa chỉ</th>
                     <th className="p-4">Loại tài khoản</th>
                     <th className="p-4">Điểm tích lũy</th>
@@ -2045,7 +2047,7 @@ export default function AdminPortal({
                 <tbody className="divide-y divide-gray-100">
                   {filteredCustomers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-400 italic font-medium">
+                      <td colSpan={7} className="p-8 text-center text-gray-400 italic font-medium">
                         {users.length === 0 ? 'Chưa có khách hàng nào đăng ký.' : 'Không tìm thấy khách hàng khớp với từ khóa tìm kiếm.'}
                       </td>
                     </tr>
@@ -2057,7 +2059,18 @@ export default function AdminPortal({
                           <p className="font-mono text-gray-700">{u.phone}</p>
                           {u.email && <p className="text-gray-400 text-[11px]">{u.email}</p>}
                         </td>
-                        <td className="p-4 text-gray-500 max-w-[220px] truncate">{u.address || '—'}</td>
+                        <td className="p-4">
+                          <button
+                            type="button"
+                            onClick={() => setVisiblePasswordPhone(prev => prev === u.phone ? null : u.phone)}
+                            className="flex items-center gap-1.5 font-mono text-gray-600 hover:text-gray-950 cursor-pointer"
+                            title={visiblePasswordPhone === u.phone ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                          >
+                            {visiblePasswordPhone === u.phone ? (u.password || '(trống)') : '••••••••'}
+                            {visiblePasswordPhone === u.phone ? <Eye className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
+                          </button>
+                        </td>
+                        <td className="p-4 text-gray-500">{u.address || '—'}</td>
                         <td className="p-4">
                           {u.isMember ? (
                             <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-150 px-2 py-1 rounded-full">
