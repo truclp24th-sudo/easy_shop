@@ -241,6 +241,29 @@ export default function App() {
   }
 }, []);
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+
+  // ================= Đồng bộ ý kiến liên hệ real-time qua Firestore =================
+  // TRƯỚC ĐÂY: contactMessages chỉ lưu trên máy khách (giống lỗi tài khoản khách hàng đã sửa
+  // trước đó) - admin xem trên thiết bị khác sẽ KHÔNG thấy được ý kiến liên hệ của khách.
+  // Nay chuyển sang lưu tập trung, đồng bộ real-time giống products/orders/reviews.
+  useEffect(() => {
+    const contactQuery = query(collection(db, 'contactMessages'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      contactQuery,
+      (snapshot) => {
+        const firestoreMessages = snapshot.docs.map((d) => d.data() as ContactMessage);
+        setContactMessages(firestoreMessages);
+        saveLocalData('contact_messages', firestoreMessages);
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe ý kiến liên hệ từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig>(() => {
     const saved = localStorage.getItem('esy_telegram_config');
     return saved ? JSON.parse(saved) : { botToken: '', chatId: '', enabled: false };
@@ -656,10 +679,27 @@ if (productId) {
     });
   };
 
-  const syncContactMessages = (newContactMessages: ContactMessage[]) => {
-    setContactMessages(newContactMessages);
-    saveLocalData('contact_messages', newContactMessages);
+  const syncContactMessages = (updater: ContactMessage[] | ((prev: ContactMessage[]) => ContactMessage[])) => {
+    setContactMessages(prev => {
+      const newMessages = typeof updater === 'function'
+        ? (updater as (m: ContactMessage[]) => ContactMessage[])(prev)
+        : updater;
+
+      saveLocalData('contact_messages', newMessages);
+      newMessages.forEach((msg) => {
+        setDoc(doc(db, 'contactMessages', msg.id), msg, { merge: true }).catch((err) => {
+          console.error('Lỗi đồng bộ ý kiến liên hệ lên Firestore:', err);
+        });
+      });
+
+      return newMessages;
+    });
   };
+
+  // Câu trả lời mặc định dùng chung cho MỌI đánh giá sản phẩm và ý kiến liên hệ mới - gửi tự
+  // động ngay khi khách gửi, admin không cần thao tác gì thêm. Nếu sau này muốn đổi nội dung
+  // trả lời tự động, chỉ cần sửa đúng 1 chỗ này.
+  const AUTO_REPLY_MESSAGE = 'Cảm ơn quý khách đã dành thời gian đánh giá sản phẩm và dịch vụ của EasyShop. Shop luôn trân trọng mọi phản hồi và sẽ không ngừng cải thiện để mang đến trải nghiệm mua sắm tốt hơn.';
 
   const handleAddContactMessage = (name: string, email: string, message: string) => {
     const newMessage: ContactMessage = {
@@ -668,21 +708,24 @@ if (productId) {
       email,
       message,
       createdAt: new Date().toISOString(),
-      status: 'PENDING'
+      // Tự động trả lời + đánh dấu đã xử lý ngay lúc gửi - admin không cần bấm duyệt/trả lời tay.
+      status: 'READ',
+      reply: AUTO_REPLY_MESSAGE
     };
-    syncContactMessages([...contactMessages, newMessage]);
+    syncContactMessages(prev => [...prev, newMessage]);
   };
 
   const handleUpdateContactStatus = (contactId: string, status: 'PENDING' | 'READ') => {
-    const updated = contactMessages.map(msg => 
+    syncContactMessages(prev => prev.map(msg =>
       msg.id === contactId ? { ...msg, status } : msg
-    );
-    syncContactMessages(updated);
+    ));
   };
 
   const handleDeleteContactMessage = (contactId: string) => {
-    const updated = contactMessages.filter(msg => msg.id !== contactId);
-    syncContactMessages(updated);
+    syncContactMessages(prev => prev.filter(msg => msg.id !== contactId));
+    deleteDoc(doc(db, 'contactMessages', contactId)).catch((err) => {
+      console.error('Lỗi xóa ý kiến liên hệ trên Firestore:', err);
+    });
   };
 
   // Cart Management
@@ -1021,7 +1064,9 @@ syncOrders(prev => [newOrder, ...prev]);
       rating,
       comment,
       createdAt: new Date().toISOString(),
-      status: 'PENDING'
+      // Tự động duyệt + trả lời ngay lúc khách gửi đánh giá - admin không cần bấm duyệt/trả lời tay.
+      status: 'APPROVED',
+      reply: AUTO_REPLY_MESSAGE
     };
 
     const updatedReviews = [newReview, ...reviews];

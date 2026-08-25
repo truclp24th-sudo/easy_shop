@@ -81,6 +81,7 @@ export interface ContactMessage {
   message: string;
   createdAt: string;
   status: 'PENDING' | 'READ';
+  reply?: string;
 }
 
 export interface AppUser {
