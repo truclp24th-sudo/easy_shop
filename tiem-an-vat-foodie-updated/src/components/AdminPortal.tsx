@@ -3,11 +3,12 @@ import {
   TrendingUp, ShoppingBag, MessageSquare, ShieldAlert, Plus, 
   Trash2, Edit, Save, Power, Check, RefreshCw, X, Award, MapPin, 
   CornerDownRight, CheckCircle, Clock, Truck, ShieldCheck, Flame, Info, Star,
-  Bot, Send, Bell, AlertCircle, Tag, Percent, Package, Eye, EyeOff
+  Bot, Send, Bell, AlertCircle, Tag, Percent, Package, Eye, EyeOff, MapPinned
 } from 'lucide-react';
 import { CATEGORY_ICON_OPTIONS, getCategoryIcon } from '../categoryIcons';
-import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category, AppUser } from '../types';
+import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category, AppUser, Shipper } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { AreaTagInput, normalizeVN } from './ShipperPortal';
 
 interface AdminPortalProps {
   products: Product[];
@@ -35,6 +36,9 @@ interface AdminPortalProps {
   onUpdateCategory: (category: Category) => void;
   onDeleteCategory: (categoryId: string) => void;
   users: AppUser[];
+  shippers: Shipper[];
+  onUpdateShipperAreas: (phone: string, name: string, areas: string[]) => void;
+  onDeleteShipper: (phone: string) => void;
 }
 
 export default function AdminPortal({
@@ -62,9 +66,12 @@ export default function AdminPortal({
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
-  users
+  users,
+  shippers,
+  onUpdateShipperAreas,
+  onDeleteShipper
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'customers' | 'telegram'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'customers' | 'shippers' | 'telegram'>('stats');
   const [reviewSubTab, setReviewSubTab] = useState<'product_reviews' | 'customer_feedback'>('product_reviews');
 
   // ================= Quản lý mã giảm giá (Coupon) =================
@@ -344,6 +351,41 @@ export default function AdminPortal({
     o.customerPhone.includes(orderSearch)
   );
 
+  // ================= Quản lý Shipper =================
+  const [shipperSearch, setShipperSearch] = useState('');
+  const [editingShipperPhone, setEditingShipperPhone] = useState<string | null>(null);
+  const [editShipperAreasDraft, setEditShipperAreasDraft] = useState<string[]>([]);
+  const filteredShippers = shippers.filter(s => {
+    const keyword = normalizeVN(shipperSearch);
+    if (!keyword) return true;
+    return (
+      normalizeVN(s.name).includes(keyword) ||
+      s.phone.includes(shipperSearch.trim()) ||
+      s.areas.some(a => normalizeVN(a).includes(keyword))
+    );
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Đếm số đơn đang giao / đã giao thành công của mỗi shipper (so khớp theo SĐT, chính xác
+  // hơn theo tên vì tên có thể trùng nhau giữa nhiều shipper).
+  const getShipperOrderStats = (phone: string) => ({
+    delivering: orders.filter(o => o.orderStatus === 'DELIVERING' && o.shipperPhone === phone).length,
+    completed: orders.filter(o => o.orderStatus === 'COMPLETED' && o.shipperPhone === phone).length
+  });
+
+  const openEditShipperAreas = (shipper: Shipper) => {
+    setEditingShipperPhone(shipper.phone);
+    setEditShipperAreasDraft(shipper.areas);
+  };
+
+  const handleSaveShipperAreasFromAdmin = () => {
+    if (!editingShipperPhone || editShipperAreasDraft.length === 0) return;
+    const shipper = shippers.find(s => s.phone === editingShipperPhone);
+    if (!shipper) return;
+    onUpdateShipperAreas(editingShipperPhone, shipper.name, editShipperAreasDraft);
+    setEditingShipperPhone(null);
+  };
+
+
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
   };
@@ -505,7 +547,7 @@ export default function AdminPortal({
 
       {/* Admin Tabs */}
       <div className="flex border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar gap-1.5">
-        {(['stats', 'products', 'categories', 'orders', 'customers', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
+        {(['stats', 'products', 'categories', 'orders', 'customers', 'shippers', 'reviews', 'coupons', 'telegram'] as const).map((tab) => {
           const hasPendingFeedback = tab === 'reviews' && (
             reviews.some(r => r.status === 'PENDING') || 
             contactMessages.some(m => m.status === 'PENDING')
@@ -530,6 +572,7 @@ export default function AdminPortal({
               {tab === 'categories' && `Danh mục (${categories.length})`}
               {tab === 'orders' && `Đơn đặt hàng (${orders.length})`}
               {tab === 'customers' && `Khách hàng (${users.length})`}
+              {tab === 'shippers' && `Quản lý Shipper (${shippers.length})`}
               {tab === 'reviews' && `Quản lý đánh giá & Phản hồi (${reviews.length + contactMessages.length})`}
               {tab === 'coupons' && `Mã giảm giá (${coupons.length})`}
               {tab === 'telegram' && 'Liên kết Telegram'}
@@ -2144,6 +2187,155 @@ export default function AdminPortal({
                   >
                     Sau →
                   </button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Tab: Quản lý Shipper - xem/đổi khu vực nhận đơn của từng shipper, gỡ shipper nghỉ việc */}
+        {activeTab === 'shippers' && (
+          <motion.div
+            key="shippers"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="max-w-md shadow-xs rounded-xl bg-white border border-gray-100 p-1.5 flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên, SĐT, khu vực..."
+                  value={shipperSearch}
+                  onChange={(e) => setShipperSearch(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs font-semibold focus:outline-hidden bg-transparent"
+                />
+              </div>
+              <button
+                onClick={() => window.open('/shipper', '_blank')}
+                className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase transition-colors cursor-pointer"
+                title="Mở Cổng Shipper ở tab mới - gửi link này cho shipper để họ tự đăng ký khu vực và nhận đơn"
+              >
+                <Truck className="h-4 w-4" /> Mở Cổng Shipper
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[900px]">
+                <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 font-black tracking-wider">
+                  <tr>
+                    <th className="p-4 w-12">STT</th>
+                    <th className="p-4">Shipper</th>
+                    <th className="p-4">Khu vực nhận đơn</th>
+                    <th className="p-4">Đang giao</th>
+                    <th className="p-4">Đã giao (tổng)</th>
+                    <th className="p-4">Ngày đăng ký</th>
+                    <th className="p-4 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredShippers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-gray-400 italic font-medium">
+                        {shippers.length === 0
+                          ? 'Chưa có shipper nào đăng ký qua Cổng Shipper.'
+                          : 'Không tìm thấy shipper khớp với từ khóa tìm kiếm.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredShippers.map((s, idx) => {
+                      const stats = getShipperOrderStats(s.phone);
+                      return (
+                        <tr key={s.phone} className="hover:bg-gray-50/60 transition-colors align-top">
+                          <td className="p-4 text-gray-400 font-mono">{idx + 1}</td>
+                          <td className="p-4">
+                            <p className="font-extrabold text-gray-900">{s.name}</p>
+                            <p className="font-mono text-gray-500 text-[11px]">{s.phone}</p>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {s.areas.map((area, i) => (
+                                <span key={i} className="text-[10px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                  {area}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            {stats.delivering > 0 ? (
+                              <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-150 px-2 py-1 rounded-full">
+                                {stats.delivering} đơn
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="p-4 font-mono font-bold text-gray-800">{stats.completed}</td>
+                          <td className="p-4 text-gray-400">
+                            {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openEditShipperAreas(s)}
+                                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 cursor-pointer"
+                                title="Sửa khu vực nhận đơn"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Xác nhận gỡ shipper "${s.name}" (${s.phone}) khỏi hệ thống? Các đơn đang/đã giao trước đó sẽ KHÔNG bị ảnh hưởng.`)) {
+                                    onDeleteShipper(s.phone);
+                                  }
+                                }}
+                                className="p-2 rounded-lg hover:bg-red-50 text-red-500 cursor-pointer"
+                                title="Gỡ shipper"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal sửa khu vực nhận đơn của shipper */}
+            {editingShipperPhone && (
+              <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
+                <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-black text-gray-950 flex items-center gap-1.5">
+                      <MapPinned className="h-4 w-4" /> Khu vực nhận đơn
+                    </h2>
+                    <button
+                      onClick={() => setEditingShipperPhone(null)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <AreaTagInput areas={editShipperAreasDraft} onChange={setEditShipperAreasDraft} autoFocus />
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setEditingShipperPhone(null)}
+                      className="flex-1 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-bold cursor-pointer"
+                    >
+                      Huỷ
+                    </button>
+                    <button
+                      onClick={handleSaveShipperAreasFromAdmin}
+                      disabled={editShipperAreasDraft.length === 0}
+                      className="flex-1 py-2.5 rounded-xl bg-gray-950 hover:bg-black text-white text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Lưu
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

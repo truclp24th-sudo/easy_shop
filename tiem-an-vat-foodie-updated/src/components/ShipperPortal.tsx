@@ -20,7 +20,7 @@ const SHIPPER_IDENTITY_KEY = 'esyshop_shipper_identity';
 
 // Bỏ dấu tiếng Việt + về chữ thường để so khớp địa chỉ - khu vực không phân biệt hoa/thường,
 // có dấu/không dấu (VD: "Quận 3" vẫn khớp với địa chỉ ghi "quan 3" hoặc "Q3 Quận 3").
-const normalizeVN = (str: string) =>
+export const normalizeVN = (str: string) =>
   str
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -40,8 +40,9 @@ const isOrderInShipperAreas = (order: Order, areas: string[]) => {
 };
 
 // Ô nhập khu vực dạng "thẻ" (tag input): gõ tên khu vực rồi Enter/dấu phẩy để thêm,
-// bấm x trên từng thẻ để xoá. Dùng chung cho cả màn hình đăng ký lẫn form chỉnh sửa sau này.
-function AreaTagInput({ areas, onChange, autoFocus }: { areas: string[]; onChange: (areas: string[]) => void; autoFocus?: boolean }) {
+// bấm x trên từng thẻ để xoá. Dùng chung cho cả màn hình đăng ký ở Cổng Shipper lẫn
+// mục "Quản lý Shipper" bên Admin.
+export function AreaTagInput({ areas, onChange, autoFocus }: { areas: string[]; onChange: (areas: string[]) => void; autoFocus?: boolean }) {
   const [draft, setDraft] = useState('');
 
   const commitDraft = () => {
