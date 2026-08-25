@@ -63,6 +63,12 @@ export default function CheckoutModal({
   const [orderComplete, setOrderComplete] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState('');
 
+  // Dùng điểm tích lũy để giảm giá - phải khai báo ở đây (trước early-return "if (!isOpen)")
+  // vì mọi Hook trong React BẮT BUỘC phải gọi ở cùng vị trí trên mọi lần render, không được
+  // đặt sau 1 điều kiện return sớm - nếu không sẽ gây lỗi "Rendered more hooks than during
+  // the previous render" (React error #310) mỗi khi modal chuyển từ đóng sang mở.
+  const [usePoints, setUsePoints] = useState(false);
+
   // Autofill if user logs in
   useEffect(() => {
     if (currentUser && isOpen) {
@@ -101,7 +107,6 @@ export default function CheckoutModal({
   // 1 điểm = 10đ (khớp với công thức tích điểm: 1.000đ chi tiêu = 1 điểm).
   // Giới hạn không cho giảm vượt quá phần còn lại phải trả (sau khi đã trừ ưu đãi VIP),
   // tránh trường hợp đơn hàng bị âm tiền.
-  const [usePoints, setUsePoints] = useState(false);
   const availablePointsValue = (currentUser?.memberPoints || 0) * 10;
   const remainingAfterVip = Math.max(0, subtotal - vipDiscountAmount);
   const pointsDiscountAmount = usePoints ? Math.min(availablePointsValue, remainingAfterVip) : 0;
