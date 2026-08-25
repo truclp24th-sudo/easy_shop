@@ -2058,7 +2058,7 @@ const filteredProducts = products
 
           {/* Messenger Button */}
           <a 
-            href="https://m.me/esy.shop.printer" 
+            href="https://m.me/61593475031258" 
             target="_blank"
             rel="noopener noreferrer"
             className="h-12 w-12 rounded-full bg-gradient-to-tr from-[#0066ff] via-[#a100ff] to-[#ff0077] hover:brightness-110 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all group relative border border-pink-400/30"
