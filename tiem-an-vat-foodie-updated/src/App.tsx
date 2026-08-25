@@ -653,6 +653,16 @@ if (productId) {
     });
   };
 
+  // Admin gỡ một shipper khỏi hệ thống (VD: shipper nghỉ việc) - không ảnh hưởng các đơn
+  // hàng đã/đang giao trước đó, chỉ đơn giản là xoá hồ sơ khu vực để họ không nhận đơn mới nữa
+  // qua Cổng Shipper (nếu vẫn tự đăng nhập lại, hệ thống sẽ coi như đăng ký khu vực mới).
+  const handleDeleteShipper = (phone: string) => {
+    setShippers(prev => prev.filter(s => s.phone !== phone));
+    deleteDoc(doc(db, 'shippers', phone)).catch((err) => {
+      console.error('Lỗi xoá shipper trên Firestore:', err);
+    });
+  };
+
   // Hỗ trợ truyền vào mảng sản phẩm mới HOẶC một hàm cập nhật (updater) nhận state mới nhất.
   // Dùng dạng hàm cho MỌI thao tác liên quan tới tồn kho/soldCount để tránh "mất cập nhật"
   // khi có nhiều thao tác xảy ra gần nhau (đặt hàng, tự động chuyển trạng thái đơn, hủy đơn...).
@@ -2064,6 +2074,9 @@ const filteredProducts = products
                 onUpdateCategory={handleUpdateCategory}
                 onDeleteCategory={handleDeleteCategory}
                 users={users}
+                shippers={shippers}
+                onUpdateShipperAreas={handleSaveShipperAreas}
+                onDeleteShipper={handleDeleteShipper}
               />
             ) : (
               <AdminLogin
