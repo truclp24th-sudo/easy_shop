@@ -4,7 +4,7 @@ import {
 } from './data';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, deleteField, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon, Category } from './types';
+import { Product, CartItem, Order, Review, ContactMessage, AppUser, TelegramConfig, Coupon, Category, Shipper } from './types';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import ProductCard from './components/ProductCard';
@@ -617,6 +617,41 @@ if (productId) {
     });
   };
 
+
+  // ================= Cổng Shipper: đăng ký khu vực nhận đơn =================
+  // Mỗi shipper tự đăng ký (các) khu vực mình chạy giao hàng (VD: "Quận 1, Bình Thạnh").
+  // Hồ sơ này lưu trên Firestore (collection 'shippers', id = SĐT) để khi shipper đăng nhập lại
+  // trên máy/trình duyệt khác (hoặc xoá localStorage), khu vực đã đăng ký vẫn còn nguyên -
+  // không cần đăng ký lại từ đầu.
+  const [shippers, setShippers] = useState<Shipper[]>([]);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'shippers'),
+      (snapshot) => {
+        setShippers(snapshot.docs.map((d) => d.data() as Shipper));
+      },
+      (error) => {
+        console.error('Lỗi lắng nghe danh sách shipper từ Firestore:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleSaveShipperAreas = (phone: string, name: string, areas: string[]) => {
+    const existing = shippers.find(s => s.phone === phone);
+    const shipper: Shipper = {
+      phone,
+      name,
+      areas,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setShippers(prev => [...prev.filter(s => s.phone !== phone), shipper]);
+    setDoc(doc(db, 'shippers', phone), shipper, { merge: true }).catch((err) => {
+      console.error('Lỗi đồng bộ khu vực shipper lên Firestore:', err);
+    });
+  };
 
   // Hỗ trợ truyền vào mảng sản phẩm mới HOẶC một hàm cập nhật (updater) nhận state mới nhất.
   // Dùng dạng hàm cho MỌI thao tác liên quan tới tồn kho/soldCount để tránh "mất cập nhật"
@@ -1567,6 +1602,8 @@ const filteredProducts = products
     return (
       <ShipperPortal
         orders={orders}
+        shippers={shippers}
+        onSaveShipperAreas={handleSaveShipperAreas}
         onClaimOrder={handleClaimOrder}
         onCompleteDelivery={handleShipperCompleteDelivery}
         onReleaseOrder={handleReleaseOrder}

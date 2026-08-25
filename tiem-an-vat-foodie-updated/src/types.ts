@@ -122,3 +122,17 @@ export interface TelegramConfig {
   enabled: boolean;
 }
 
+// Hồ sơ shipper đăng ký qua Cổng Shipper. Lưu trên Firestore (id = số điện thoại) để shipper
+// đăng nhập lại trên máy khác vẫn giữ nguyên khu vực đã đăng ký, đồng thời cho phép hệ thống
+// (và admin, nếu cần mở rộng sau này) biết mỗi shipper đang phụ trách khu vực nào.
+export interface Shipper {
+  phone: string;
+  name: string;
+  // Danh sách khu vực (quận/huyện/phường/tên đường...) mà shipper này đăng ký nhận đơn.
+  // Đơn hàng chỉ hiện ra trong tab "Đơn sẵn sàng" của shipper nếu địa chỉ giao hàng của đơn
+  // khớp (chứa) một trong các khu vực này.
+  areas: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
