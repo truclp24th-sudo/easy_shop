@@ -3,12 +3,13 @@ import {
   TrendingUp, ShoppingBag, MessageSquare, ShieldAlert, Plus, 
   Trash2, Edit, Save, Power, Check, RefreshCw, X, Award, MapPin, 
   CornerDownRight, CheckCircle, Clock, Truck, ShieldCheck, Flame, Info, Star,
-  Bot, Send, Bell, AlertCircle, Tag, Percent, Package, Eye, EyeOff, MapPinned
+  Bot, Send, Bell, AlertCircle, Tag, Percent, Package, Eye, EyeOff, MapPinned,
+  ChevronDown, ChevronUp, Wallet, User, Phone, CheckCircle2, RotateCcw
 } from 'lucide-react';
 import { CATEGORY_ICON_OPTIONS, getCategoryIcon } from '../categoryIcons';
 import { Product, Order, Review, ContactMessage, TelegramConfig, Coupon, Category, AppUser, Shipper } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { AreaTagInput, normalizeVN } from './ShipperPortal';
+import { AreaTagInput, normalizeVN, isOrderInShipperAreas } from './ShipperPortal';
 
 interface AdminPortalProps {
   products: Product[];
@@ -39,6 +40,9 @@ interface AdminPortalProps {
   shippers: Shipper[];
   onUpdateShipperAreas: (phone: string, name: string, areas: string[]) => void;
   onDeleteShipper: (phone: string) => void;
+  onClaimOrder: (orderId: string, shipperName: string, shipperPhone: string) => void;
+  onReleaseOrder: (orderId: string) => void;
+  onCompleteDelivery: (orderId: string) => void;
 }
 
 export default function AdminPortal({
@@ -69,7 +73,10 @@ export default function AdminPortal({
   users,
   shippers,
   onUpdateShipperAreas,
-  onDeleteShipper
+  onDeleteShipper,
+  onClaimOrder,
+  onReleaseOrder,
+  onCompleteDelivery
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'products' | 'orders' | 'reviews' | 'coupons' | 'categories' | 'customers' | 'shippers' | 'telegram'>('stats');
   const [reviewSubTab, setReviewSubTab] = useState<'product_reviews' | 'customer_feedback'>('product_reviews');
@@ -355,6 +362,8 @@ export default function AdminPortal({
   const [shipperSearch, setShipperSearch] = useState('');
   const [editingShipperPhone, setEditingShipperPhone] = useState<string | null>(null);
   const [editShipperAreasDraft, setEditShipperAreasDraft] = useState<string[]>([]);
+  // Chỉ mở rộng chi tiết đơn hàng của MỘT shipper tại một thời điểm để bảng gọn gàng.
+  const [expandedShipperPhone, setExpandedShipperPhone] = useState<string | null>(null);
   const filteredShippers = shippers.filter(s => {
     const keyword = normalizeVN(shipperSearch);
     if (!keyword) return true;
@@ -371,6 +380,14 @@ export default function AdminPortal({
     delivering: orders.filter(o => o.orderStatus === 'DELIVERING' && o.shipperPhone === phone).length,
     completed: orders.filter(o => o.orderStatus === 'COMPLETED' && o.shipperPhone === phone).length
   });
+
+  // Đơn "sẵn sàng" khớp khu vực của shipper: đang chờ giao (PREPARING) VÀ chưa ai nhận.
+  const getShipperAvailableOrders = (areas: string[]) =>
+    orders.filter(o => o.orderStatus === 'PREPARING' && !o.shipperName && isOrderInShipperAreas(o, areas));
+
+  // Đơn shipper này đang giao (để admin có thể đánh dấu "Đã giao" hoặc "Trả đơn" thay họ).
+  const getShipperDeliveringOrders = (phone: string) =>
+    orders.filter(o => o.orderStatus === 'DELIVERING' && o.shipperPhone === phone);
 
   const openEditShipperAreas = (shipper: Shipper) => {
     setEditingShipperPhone(shipper.phone);
@@ -498,6 +515,79 @@ export default function AdminPortal({
     }
   };
 
+  // Thẻ chi tiết đơn hàng hiển thị trong mục "Đơn hàng" của Quản lý Shipper - dùng chung cho
+  // cả đơn "sẵn sàng nhận" (khớp khu vực, chưa ai nhận) và đơn "đang giao" của shipper đó.
+  const renderShipperOrderCard = (order: Order, shipper: Shipper, variant: 'available' | 'delivering') => (
+    <div key={order.id} className="bg-white rounded-xl border border-gray-150 p-3.5 space-y-2.5 shadow-xs">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-black text-gray-950">#{order.id}</span>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+          order.paymentMethod === 'COD' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+        }`}>
+          {order.paymentMethod === 'COD' ? 'Thu hộ COD' : 'Đã thanh toán online'}
+        </span>
+      </div>
+
+      <div className="space-y-1 text-xs text-gray-700">
+        <div className="flex items-center gap-1.5 font-bold">
+          <User className="h-3.5 w-3.5 text-gray-400" /> {order.customerName}
+        </div>
+        <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-950 w-fit">
+          <Phone className="h-3.5 w-3.5 text-gray-400" /> {order.customerPhone}
+        </a>
+        <div className="flex items-start gap-1.5 text-gray-600">
+          <MapPin className="h-3.5 w-3.5 text-gray-400 mt-0.5 shrink-0" />
+          <span>{order.customerAddress}</span>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-100 pt-2 space-y-1">
+        {order.items.map((item, idx) => (
+          <div key={idx} className="flex justify-between text-[11px] text-gray-600">
+            <span className="truncate pr-2">{item.quantity}x {item.productName}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+        <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
+          <Wallet className="h-3.5 w-3.5" /> Tổng thu:
+        </span>
+        <span className="text-sm font-black text-gray-950">{formatPrice(order.total)}</span>
+      </div>
+
+      {variant === 'available' && (
+        <button
+          onClick={() => onClaimOrder(order.id, shipper.name, shipper.phone)}
+          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
+        >
+          <Truck className="h-4 w-4" /> Nhận đơn
+        </button>
+      )}
+
+      {variant === 'delivering' && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => onReleaseOrder(order.id)}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Trả đơn
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm('Xác nhận shipper ĐÃ GIAO thành công đơn này?')) {
+                onCompleteDelivery(order.id);
+              }
+            }}
+            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Đã giao
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       
@@ -513,14 +603,6 @@ export default function AdminPortal({
 
         {/* Action button to trigger Add Product / Logout */}
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => window.open('/shipper', '_blank')}
-            className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase transition-colors cursor-pointer"
-            title="Mở Cổng Shipper ở tab mới - gửi link này cho shipper để họ tự nhận đơn"
-          >
-            <Truck className="h-4 w-4" /> Cổng Shipper
-          </button>
-
           {activeTab === 'products' && !isAddingNew && !editingProductId && (
             <button
               onClick={() => {
@@ -2215,9 +2297,9 @@ export default function AdminPortal({
               <button
                 onClick={() => window.open('/shipper', '_blank')}
                 className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase transition-colors cursor-pointer"
-                title="Mở Cổng Shipper ở tab mới - gửi link này cho shipper để họ tự đăng ký khu vực và nhận đơn"
+                title="Mở trang đăng ký Shipper ở tab mới - gửi link này cho shipper để họ đăng ký khu vực"
               >
-                <Truck className="h-4 w-4" /> Mở Cổng Shipper
+                <Truck className="h-4 w-4" /> Shipper
               </button>
             </div>
 
@@ -2228,6 +2310,7 @@ export default function AdminPortal({
                     <th className="p-4 w-12">STT</th>
                     <th className="p-4">Shipper</th>
                     <th className="p-4">Khu vực nhận đơn</th>
+                    <th className="p-4">Đơn hàng</th>
                     <th className="p-4">Đang giao</th>
                     <th className="p-4">Đã giao (tổng)</th>
                     <th className="p-4">Ngày đăng ký</th>
@@ -2237,67 +2320,124 @@ export default function AdminPortal({
                 <tbody className="divide-y divide-gray-100">
                   {filteredShippers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-400 italic font-medium">
+                      <td colSpan={8} className="p-8 text-center text-gray-400 italic font-medium">
                         {shippers.length === 0
-                          ? 'Chưa có shipper nào đăng ký qua Cổng Shipper.'
+                          ? 'Chưa có shipper nào đăng ký qua trang Shipper.'
                           : 'Không tìm thấy shipper khớp với từ khóa tìm kiếm.'}
                       </td>
                     </tr>
                   ) : (
                     filteredShippers.map((s, idx) => {
                       const stats = getShipperOrderStats(s.phone);
+                      const availableOrders = getShipperAvailableOrders(s.areas);
+                      const deliveringOrders = getShipperDeliveringOrders(s.phone);
+                      const isExpanded = expandedShipperPhone === s.phone;
+                      const hasOrdersToShow = availableOrders.length > 0 || deliveringOrders.length > 0;
                       return (
-                        <tr key={s.phone} className="hover:bg-gray-50/60 transition-colors align-top">
-                          <td className="p-4 text-gray-400 font-mono">{idx + 1}</td>
-                          <td className="p-4">
-                            <p className="font-extrabold text-gray-900">{s.name}</p>
-                            <p className="font-mono text-gray-500 text-[11px]">{s.phone}</p>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex flex-wrap gap-1 max-w-xs">
-                              {s.areas.map((area, i) => (
-                                <span key={i} className="text-[10px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                  {area}
+                        <React.Fragment key={s.phone}>
+                          <tr className="hover:bg-gray-50/60 transition-colors align-top">
+                            <td className="p-4 text-gray-400 font-mono">{idx + 1}</td>
+                            <td className="p-4">
+                              <p className="font-extrabold text-gray-900">{s.name}</p>
+                              <p className="font-mono text-gray-500 text-[11px]">{s.phone}</p>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {s.areas.map((area, i) => (
+                                  <span key={i} className="text-[10px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                    {area}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              {availableOrders.length > 0 ? (
+                                <button
+                                  onClick={() => setExpandedShipperPhone(isExpanded ? null : s.phone)}
+                                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase px-2.5 py-1.5 rounded-full cursor-pointer whitespace-nowrap"
+                                >
+                                  <Truck className="h-3 w-3" /> Nhận đơn{availableOrders.length > 1 ? ` (${availableOrders.length})` : ''}
+                                  {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                </button>
+                              ) : hasOrdersToShow ? (
+                                <button
+                                  onClick={() => setExpandedShipperPhone(isExpanded ? null : s.phone)}
+                                  className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 border border-blue-150 text-blue-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-full cursor-pointer whitespace-nowrap"
+                                >
+                                  Xem đơn đang giao
+                                  {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                </button>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {stats.delivering > 0 ? (
+                                <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-150 px-2 py-1 rounded-full">
+                                  {stats.delivering} đơn
                                 </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            {stats.delivering > 0 ? (
-                              <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-50 border border-blue-150 px-2 py-1 rounded-full">
-                                {stats.delivering} đơn
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                          <td className="p-4 font-mono font-bold text-gray-800">{stats.completed}</td>
-                          <td className="p-4 text-gray-400">
-                            {new Date(s.createdAt).toLocaleDateString('vi-VN')}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => openEditShipperAreas(s)}
-                                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 cursor-pointer"
-                                title="Sửa khu vực nhận đơn"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (window.confirm(`Xác nhận gỡ shipper "${s.name}" (${s.phone}) khỏi hệ thống? Các đơn đang/đã giao trước đó sẽ KHÔNG bị ảnh hưởng.`)) {
-                                    onDeleteShipper(s.phone);
-                                  }
-                                }}
-                                className="p-2 rounded-lg hover:bg-red-50 text-red-500 cursor-pointer"
-                                title="Gỡ shipper"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="p-4 font-mono font-bold text-gray-800">{stats.completed}</td>
+                            <td className="p-4 text-gray-400">
+                              {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => openEditShipperAreas(s)}
+                                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 cursor-pointer"
+                                  title="Sửa khu vực nhận đơn"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Xác nhận gỡ shipper "${s.name}" (${s.phone}) khỏi hệ thống? Các đơn đang/đã giao trước đó sẽ KHÔNG bị ảnh hưởng.`)) {
+                                      onDeleteShipper(s.phone);
+                                    }
+                                  }}
+                                  className="p-2 rounded-lg hover:bg-red-50 text-red-500 cursor-pointer"
+                                  title="Gỡ shipper"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Hàng mở rộng: chi tiết đơn hàng sẵn sàng nhận (khớp khu vực) + đơn đang giao */}
+                          {isExpanded && hasOrdersToShow && (
+                            <tr>
+                              <td colSpan={8} className="p-4 bg-gray-50/70">
+                                <div className="space-y-4">
+                                  {availableOrders.length > 0 && (
+                                    <div>
+                                      <p className="text-[10px] font-black uppercase text-gray-500 mb-2">
+                                        Đơn sẵn sàng khớp khu vực ({availableOrders.length})
+                                      </p>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {availableOrders.map(o => renderShipperOrderCard(o, s, 'available'))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {deliveringOrders.length > 0 && (
+                                    <div>
+                                      <p className="text-[10px] font-black uppercase text-gray-500 mb-2">
+                                        Đang giao ({deliveringOrders.length})
+                                      </p>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {deliveringOrders.map(o => renderShipperOrderCard(o, s, 'delivering'))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })
                   )}
