@@ -1611,12 +1611,8 @@ const filteredProducts = products
   if (currentView === 'shipper') {
     return (
       <ShipperPortal
-        orders={orders}
         shippers={shippers}
         onSaveShipperAreas={handleSaveShipperAreas}
-        onClaimOrder={handleClaimOrder}
-        onCompleteDelivery={handleShipperCompleteDelivery}
-        onReleaseOrder={handleReleaseOrder}
         syncError={firestoreSyncError}
         onGoHome={() => {
           window.history.replaceState({}, '', '/');
@@ -2077,6 +2073,9 @@ const filteredProducts = products
                 shippers={shippers}
                 onUpdateShipperAreas={handleSaveShipperAreas}
                 onDeleteShipper={handleDeleteShipper}
+                onClaimOrder={handleClaimOrder}
+                onReleaseOrder={handleReleaseOrder}
+                onCompleteDelivery={handleShipperCompleteDelivery}
               />
             ) : (
               <AdminLogin
